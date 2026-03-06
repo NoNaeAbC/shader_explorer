@@ -251,8 +251,3 @@ executable(
   install : true,
   install_dir : get_option('bindir'),
 )
-
-install_data(
-  'completions/shader_explorer.fish',
-  install_dir : join_paths(get_option('datadir'), 'fish', 'vendor_completions.d'),
-)
