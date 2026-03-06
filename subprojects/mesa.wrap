@@ -1,0 +1,5 @@
+[wrap-git]
+url = https://gitlab.freedesktop.org/mesa/mesa.git
+revision = mesa-26.0.1
+depth = 1
+clone-recursive = true
