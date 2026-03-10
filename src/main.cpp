@@ -49,8 +49,6 @@ namespace {
 		std::map<std::string, std::string> env;
 	};
 
-	constexpr const char *kMesaBuildRootRel = "build/subprojects/mesa";
-
 	enum class OutputTarget : std::uint8_t {
 		Info,
 		Spirv,
@@ -266,65 +264,6 @@ namespace {
 		std::memcpy(out_spirv.data(), mapping, bytes);
 		munmap(mapping, bytes);
 		return true;
-	}
-
-	bool valid_repo_root(const fs::path &path) {
-		return fs::exists(path / "subprojects" / "mesa") && fs::exists(path / "shader_explorer");
-	}
-
-	std::optional<fs::path> executable_path(std::string &out_error) {
-		std::vector<char> buffer(256, '\0');
-		for (;;) {
-			errno				= 0;
-			ssize_t const count = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
-			if (count < 0) {
-				out_error = std::format("readlink('/proc/self/exe') failed (errno={})", errno);
-				return std::nullopt;
-			}
-			size_t const count_size = static_cast<size_t>(count);
-			if (count_size >= buffer.size() - 1) {
-				if (buffer.size() >= (1U << 20)) {
-					out_error = "readlink('/proc/self/exe') path exceeds 1 MiB buffer cap";
-					return std::nullopt;
-				}
-				buffer.resize(buffer.size() * 2, '\0');
-				continue;
-			}
-			buffer[count_size] = '\0';
-			return fs::path(buffer.data());
-		}
-	}
-
-	fs::path walk_up_for_repo_root(const fs::path &start) {
-		std::error_code ec;
-		fs::path		current = fs::absolute(start, ec);
-		if (ec) { return {}; }
-		while (!current.empty()) {
-			if (valid_repo_root(current)) { return current; }
-			if (current == current.root_path()) { break; }
-			current = current.parent_path();
-		}
-		return {};
-	}
-
-	std::optional<fs::path> locate_repo_root(std::string &out_error) {
-		if (const char *explicit_root = std::getenv("SHADER_EXPLORER_ROOT")) {
-			if (explicit_root[0] != 0) {
-				fs::path candidate = walk_up_for_repo_root(fs::path(explicit_root));
-				if (!candidate.empty()) { return candidate; }
-				out_error = std::format("SHADER_EXPLORER_ROOT does not point to a valid repo root: {}", explicit_root);
-				return std::nullopt;
-			}
-		}
-
-		if (auto exe = executable_path(out_error); exe.has_value()) {
-			fs::path candidate = walk_up_for_repo_root(exe->parent_path());
-			if (!candidate.empty()) { return candidate; }
-			out_error = std::format("failed to locate repo root by walking upward from executable path: {}",
-									exe->parent_path().string());
-			return std::nullopt;
-		}
-		return std::nullopt;
 	}
 
 	std::string read_text_file(const fs::path &path) {
@@ -770,7 +709,7 @@ namespace {
 		return response;
 	}
 
-	fs::path resolve_mesa_build_root(const fs::path &repo_root, const CliOptions &options) {
+	fs::path resolve_mesa_build_root(const CliOptions &options) {
 		if (options.mesa_build_root.has_value()) { return *options.mesa_build_root; }
 		if (const char *override_root = std::getenv("SHADER_EXPLORER_MESA_BUILD_ROOT")) {
 			if (override_root[0] != 0) { return {override_root}; }
@@ -778,7 +717,7 @@ namespace {
 		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT).empty()) {
 			return {SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT};
 		}
-		return repo_root / kMesaBuildRootRel;
+		return {};
 	}
 
 
@@ -1675,21 +1614,18 @@ namespace {
 
 int main(int argc, char **argv) {
 	try {
-		std::string repo_root_error;
-		auto const	repo_root_opt = locate_repo_root(repo_root_error);
-		if (!repo_root_opt.has_value()) {
-			std::println(stderr, "failed to resolve repo root: {}", repo_root_error);
-			return 1;
-		}
-		fs::path const &repo_root = *repo_root_opt;
-
 		auto catalog = build_device_catalog();
 
 		CliOptions options;
 		if (std::optional<int> parse_exit = parse_cli_options(argc, argv, catalog, options); parse_exit.has_value()) {
 			return *parse_exit;
 		}
-		fs::path const mesa_build_root = resolve_mesa_build_root(repo_root, options);
+		fs::path const mesa_build_root = resolve_mesa_build_root(options);
+		if (mesa_build_root.empty()) {
+			std::println(stderr,
+						 "failed to resolve Mesa build root: set --mesa-build-root or SHADER_EXPLORER_MESA_BUILD_ROOT");
+			return 1;
+		}
 		if (std::optional<int> internal_exit = maybe_handle_internal_mode(options); internal_exit.has_value()) {
 			return *internal_exit;
 		}
