@@ -165,20 +165,60 @@ if not vulkan_headers_sp.found()
 endif
 vulkan_headers_dep = vulkan_headers_sp.dependency('Vulkan-Headers')
 
-vulkan_headers_config_dir = run_command(
-  'sh',
+vulkan_headers_version_path = run_command(
+  python,
   '-c',
-  'config=$(find "$0" -path "*/VulkanHeadersConfig.cmake" -print -quit); test -n "$config" && dirname "$config"',
+  '''
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+match = next(root.rglob('VulkanHeadersConfigVersion.cmake'), None)
+print(match if match else '', end='')
+''',
   build_root / 'subprojects' / 'vulkan-headers' / '__CMake_build',
   check : true,
 ).stdout().strip()
-if vulkan_headers_config_dir == ''
-  error('Failed to resolve VulkanHeadersConfig.cmake from the configured vulkan-headers subproject')
+if vulkan_headers_version_path == ''
+  error('Failed to resolve VulkanHeadersConfigVersion.cmake from the configured vulkan-headers subproject')
 endif
+
+vulkan_headers_package_dir = build_root / 'vulkan-headers-cmake-package'
+run_command(
+  python,
+  '-c',
+  '''
+import pathlib
+import shutil
+import sys
+
+package_dir = pathlib.Path(sys.argv[1])
+version_path = pathlib.Path(sys.argv[2])
+include_dir = pathlib.Path(sys.argv[3])
+
+package_dir.mkdir(parents=True, exist_ok=True)
+
+(package_dir / 'VulkanHeadersConfig.cmake').write_text(f"""\
+if(NOT TARGET Vulkan::Headers)
+  add_library(Vulkan::Headers INTERFACE IMPORTED)
+  set_target_properties(Vulkan::Headers PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES \"{include_dir}\"
+  )
+endif()
+""", encoding='utf-8')
+
+shutil.copyfile(version_path, package_dir / 'VulkanHeadersConfigVersion.cmake')
+''',
+  vulkan_headers_package_dir,
+  vulkan_headers_version_path,
+  source_root / 'subprojects' / 'vulkan-headers' / 'include',
+  check : true,
+)
 
 vulkan_loader_opts = cmake_mod.subproject_options()
 vulkan_loader_opts.add_cmake_defines({
-  'VulkanHeaders_DIR': vulkan_headers_config_dir,
+  'VulkanHeaders_DIR': vulkan_headers_package_dir,
+  'CMAKE_PREFIX_PATH': vulkan_headers_package_dir,
 })
 vulkan_loader_sp = cmake_mod.subproject('vulkan-loader', options: vulkan_loader_opts)
 if not vulkan_loader_sp.found()
