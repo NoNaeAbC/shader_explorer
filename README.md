@@ -38,6 +38,7 @@ Notable options:
 
 - `--version` prints the program version and exits.
 - `--list-gpus` prints the available GPU presets.
+- `--gpu <key>` selects the target GPU preset. There is no automatic GPU selection.
 - `--no-color` disables ANSI color in text output.
 - `--output <path>` writes output to a file; color is disabled automatically for file output.
 

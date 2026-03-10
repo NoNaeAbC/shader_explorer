@@ -1151,7 +1151,7 @@ namespace {
 					 "options:\n"
 					 "  --version        print program version and exit\n"
 					 "  --list-gpus      list available GPU presets\n"
-					 "  --gpu <key>      select a GPU preset (default: auto)\n"
+					 "  --gpu <key>      select a GPU preset\n"
 					 "  --lang <l>       source language: auto, slang, glsl (default: auto)\n"
 					 "  --target <t>     output target: info, spirv, final_nir, asm (default: asm)\n"
 					 "  --binding-model <m>  runtime descriptor model: classic, push_descriptor, descriptor_buffer\n"
