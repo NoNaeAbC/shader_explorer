@@ -25,6 +25,40 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Compute Slang cache key
+        id: slang-cache-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "commit=$(git -C slang rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/release.yml') }}
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('.github/workflows/release.yml') }}
+
+      - name: Cache Cargo binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-bin-${{ hashFiles('.github/workflows/release.yml') }}
+
+      - name: Cache Slang build
+        id: slang-cache
+        uses: actions/cache@v4
+        with:
+          path: slang/__CMake_build_external
+          key: ${{ runner.os }}-slang-${{ steps.slang-cache-key.outputs.commit }}-${{ hashFiles('build_slang.sh') }}
+
       - name: Configure LLVM apt repository
         shell: bash
         run: |
@@ -99,11 +133,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo install --locked bindgen-cli --version 0.71.1
+          if ! command -v bindgen >/dev/null; then
+            cargo install --locked bindgen-cli --version 0.71.1
+          fi
+          if ! command -v cbindgen >/dev/null; then
+            cargo install --locked cbindgen --version 0.28.0
+          fi
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
 
-      - name: Verify bindgen
-        run: bindgen --help >/dev/null
+      - name: Verify Rust binding tools
+        run: |
+          bindgen --help >/dev/null
+          cbindgen --version
 
       - name: Verify external build dependencies
         shell: bash
@@ -115,8 +156,9 @@ jobs:
           rustc --version
           cargo --version
           bindgen --version
+          cbindgen --version
           python3 -c 'import mako'
-          for tool in cmake ninja pkg-config rustc cargo bindgen bison flex "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          for tool in cmake ninja pkg-config rustc cargo bindgen cbindgen bison flex "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
@@ -157,6 +199,7 @@ jobs:
           echo "value=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Build Slang
+        if: steps.slang-cache.outputs.cache-hit != 'true'
         run: ./build_slang.sh
 
       - name: Configure Meson
