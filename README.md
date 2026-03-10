@@ -43,6 +43,7 @@ Notable options:
 - `--output <path>` writes output to a file; color is disabled automatically for file output.
 
 Available GPUs:
+```
   amd-bonaire - AMD RADV (bonaire)
   amd-gfx1201 - AMD RADV (gfx1201)
   amd-navi10 - AMD RADV (navi10)
