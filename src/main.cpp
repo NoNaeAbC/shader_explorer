@@ -1211,6 +1211,10 @@ namespace {
 				print_usage(catalog);
 				return 0;
 			}
+			if (arg == "--version") {
+				std::println("{}", SHADER_EXPLORER_VERSION);
+				return 0;
+			}
 			if (arg == "--internal-mode") {
 				if (i + 1 >= argc) {
 					std::println(stderr, "--internal-mode requires a value");
