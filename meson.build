@@ -165,7 +165,22 @@ if not vulkan_headers_sp.found()
 endif
 vulkan_headers_dep = vulkan_headers_sp.dependency('Vulkan-Headers')
 
-vulkan_loader_sp = cmake_mod.subproject('vulkan-loader')
+vulkan_headers_config_dir = run_command(
+  'sh',
+  '-c',
+  'config=$(find "$0" -path "*/VulkanHeadersConfig.cmake" -print -quit); test -n "$config" && dirname "$config"',
+  build_root / 'subprojects' / 'vulkan-headers' / '__CMake_build',
+  check : true,
+).stdout().strip()
+if vulkan_headers_config_dir == ''
+  error('Failed to resolve VulkanHeadersConfig.cmake from the configured vulkan-headers subproject')
+endif
+
+vulkan_loader_opts = cmake_mod.subproject_options()
+vulkan_loader_opts.add_cmake_defines({
+  'VulkanHeaders_DIR': vulkan_headers_config_dir,
+})
+vulkan_loader_sp = cmake_mod.subproject('vulkan-loader', options: vulkan_loader_opts)
 if not vulkan_loader_sp.found()
   error('vulkan-loader subproject not found')
 endif
