@@ -1,0 +1,13 @@
+option(
+  'no_warnings',
+  type : 'boolean',
+  value : false,
+  description : 'Disable project warning flags'
+)
+
+option(
+  'no_werror',
+  type : 'boolean',
+  value : false,
+  description : 'Do not promote warnings to errors'
+)
