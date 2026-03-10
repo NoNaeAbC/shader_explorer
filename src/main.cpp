@@ -44,8 +44,8 @@ namespace {
 		std::string						   key;
 		std::string						   vendor;
 		std::string						   description;
-		std::string						   vulkan_driver_rel;
-		std::string						   shim_rel;
+		std::string						   vulkan_icd_file;
+		std::string						   shim_file;
 		std::map<std::string, std::string> env;
 	};
 
@@ -120,8 +120,8 @@ namespace {
 		std::string				binding_model			= "classic";
 		size_t					requested_subgroup_size = 0;
 		bool					require_full_subgroups	= false;
+		bool					no_color				= false;
 		std::string				output_path				= "-";
-		std::optional<fs::path> mesa_build_root;
 		std::optional<fs::path> shader_path;
 		InternalMode			internal_mode		 = InternalMode::None;
 		bool					internal_shim_ready	 = false;
@@ -220,8 +220,11 @@ namespace {
 		return parse_spirv_target_arg(trimmed_tex, mode, out_version) && mode == SpirvTargetMode::Explicit;
 	}
 
-#ifndef SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT
-#define SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT ""
+#ifndef SHADER_EXPLORER_DEFAULT_MESA_LIBDIR
+#define SHADER_EXPLORER_DEFAULT_MESA_LIBDIR ""
+#endif
+#ifndef SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR
+#define SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR ""
 #endif
 
 	struct SpirvSharedMemory {
@@ -709,35 +712,39 @@ namespace {
 		return response;
 	}
 
-	fs::path resolve_mesa_build_root(const CliOptions &options) {
-		if (options.mesa_build_root.has_value()) { return *options.mesa_build_root; }
-		if (const char *override_root = std::getenv("SHADER_EXPLORER_MESA_BUILD_ROOT")) {
-			if (override_root[0] != 0) { return {override_root}; }
-		}
-		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT).empty()) {
-			return {SHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT};
+	fs::path default_mesa_libdir() {
+		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_MESA_LIBDIR).empty()) {
+			return {SHADER_EXPLORER_DEFAULT_MESA_LIBDIR};
 		}
 		return {};
 	}
 
+	fs::path default_vulkan_icd_dir() {
+		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR).empty()) {
+			return {SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR};
+		}
+		return {};
+	}
 
-	// This code is ugly, but I'm too lazy to refactor this AI slop.
-	bool mesa_artifacts_ready(const fs::path &mesa_build_root, const device_config &config, std::string &reason) {
-		fs::path const driver_path = mesa_build_root / config.vulkan_driver_rel;
-		if (!fs::exists(driver_path)) {
-			reason = "missing Vulkan driver: " + driver_path.string();
+	fs::path resolve_installed_library_path(const fs::path &installed_libdir, std::string_view library_file) {
+		return installed_libdir / library_file;
+	}
+
+	fs::path resolve_installed_icd_path(const fs::path &installed_icd_dir, std::string_view icd_file) {
+		return installed_icd_dir / icd_file;
+	}
+
+
+	bool mesa_artifacts_ready(const device_config &config, std::string &reason) {
+		fs::path const installed_libdir = default_mesa_libdir();
+		fs::path const installed_icd_dir = default_vulkan_icd_dir();
+		fs::path const icd_path = resolve_installed_icd_path(installed_icd_dir, config.vulkan_icd_file);
+		if (!fs::exists(icd_path)) {
+			reason = "missing ICD JSON: " + icd_path.string();
 			return false;
 		}
-		std::string				   driver_name = driver_path.stem().string();
-		constexpr std::string_view prefix	   = "libvulkan_";
-		if (std::string_view(driver_name).starts_with(prefix)) { driver_name = driver_name.substr(prefix.size()); }
-		fs::path const icd_devenv_path = driver_path.parent_path() / (driver_name + "_devenv_icd.x86_64.json");
-		if (!fs::exists(icd_devenv_path)) {
-			reason = "missing ICD JSON for Vulkan driver: " + driver_path.string();
-			return false;
-		}
-		if (!config.shim_rel.empty()) {
-			fs::path const shim_path = mesa_build_root / config.shim_rel;
+		if (!config.shim_file.empty()) {
+			fs::path const shim_path = resolve_installed_library_path(installed_libdir, config.shim_file);
 			if (!fs::exists(shim_path)) {
 				reason = "missing DRM shim: " + shim_path.string();
 				return false;
@@ -746,21 +753,17 @@ namespace {
 		return true;
 	}
 
-	bool write_icd_files_for_drivers(const std::vector<fs::path> &driver_paths, const std::string &gpu_key) {
-		if (driver_paths.empty()) {
+	bool write_icd_files_for_drivers(const std::vector<fs::path> &icd_paths, const std::string &gpu_key) {
+		if (icd_paths.empty()) {
 			std::println(stderr, "no Vulkan ICD drivers provided for gpu preset '{}'", gpu_key);
 			return false;
 		}
 
 		std::string vk_driver_files;
 
-		for (const fs::path &driver_path: driver_paths) {
-			std::string				   driver_name = driver_path.stem().string();
-			constexpr std::string_view prefix	   = "libvulkan_";
-			if (std::string_view(driver_name).starts_with(prefix)) { driver_name = driver_name.substr(prefix.size()); }
-			fs::path const icd_path = driver_path.parent_path() / (driver_name + "_devenv_icd.x86_64.json");
+		for (const fs::path &icd_path: icd_paths) {
 			if (!fs::exists(icd_path)) {
-				std::println(stderr, "missing Mesa-generated ICD JSON for driver: {}", driver_path.string());
+				std::println(stderr, "missing Mesa ICD JSON: {}", icd_path.string());
 				return false;
 			}
 			if (!vk_driver_files.empty()) { vk_driver_files += ":"; }
@@ -772,27 +775,23 @@ namespace {
 		return true;
 	}
 
-	bool configure_gpu_environment(const fs::path &mesa_build_root, const device_config &config, bool load_shim_now) {
+	bool configure_gpu_environment(const device_config &config, bool load_shim_now) {
 		std::string reason;
-		if (!mesa_artifacts_ready(mesa_build_root, config, reason)) {
-			std::println(stderr,
-						 "Mesa artifacts not ready for gpu preset '{}': {}\n"
-						 "Build Mesa for this preset via Meson options or set:\n"
-						 "  --mesa-build-root <path>\n"
-						 "  SHADER_EXPLORER_MESA_BUILD_ROOT",
-						 config.key, reason);
+		if (!mesa_artifacts_ready(config, reason)) {
+			std::println(stderr, "Mesa artifacts not ready for gpu preset '{}': {}", config.key, reason);
 			return false;
 		}
 
-		fs::path const		  primary_driver_path = mesa_build_root / config.vulkan_driver_rel;
-		std::vector<fs::path> driver_paths		  = {primary_driver_path};
+		fs::path const installed_libdir = default_mesa_libdir();
+		fs::path const installed_icd_dir = default_vulkan_icd_dir();
+		std::vector<fs::path> icd_paths = {resolve_installed_icd_path(installed_icd_dir, config.vulkan_icd_file)};
 
-		if (!write_icd_files_for_drivers(driver_paths, config.key)) { return false; }
+		if (!write_icd_files_for_drivers(icd_paths, config.key)) { return false; }
 
 		for (const auto &entry: config.env) { setenv(entry.first.c_str(), entry.second.c_str(), 1); }
 
-		if (load_shim_now && !config.shim_rel.empty()) {
-			fs::path const shim_path   = mesa_build_root / config.shim_rel;
+		if (load_shim_now && !config.shim_file.empty()) {
+			fs::path const shim_path = resolve_installed_library_path(installed_libdir, config.shim_file);
 			void const	  *shim_handle = dlopen(shim_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
 			if (shim_handle == nullptr) {
 				const char *const dl_error = dlerror();
@@ -1120,7 +1119,7 @@ namespace {
 		return true;
 	}
 
-	bool run_spirv_dis(const std::vector<uint32_t> &spirv, std::string &disassembly) {
+	bool run_spirv_dis(const std::vector<uint32_t> &spirv, bool use_color, std::string &disassembly) {
 		spvtools::SpirvTools tools(SPV_ENV_UNIVERSAL_1_6);
 		tools.SetMessageConsumer(
 				[](spv_message_level_t level, const char *, const spv_position_t &pos, const char *message) {
@@ -1129,8 +1128,9 @@ namespace {
 					}
 				});
 
-		constexpr uint32_t options = SPV_BINARY_TO_TEXT_OPTION_INDENT | SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
-									 SPV_BINARY_TO_TEXT_OPTION_COMMENT | SPV_BINARY_TO_TEXT_OPTION_COLOR;
+		uint32_t options = SPV_BINARY_TO_TEXT_OPTION_INDENT | SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+						   SPV_BINARY_TO_TEXT_OPTION_COMMENT;
+		if (use_color) { options |= SPV_BINARY_TO_TEXT_OPTION_COLOR; }
 		if (!tools.Disassemble(spirv, &disassembly, options)) {
 			std::println(stderr, "in-process spirv-dis failed");
 			return false;
@@ -1140,16 +1140,16 @@ namespace {
 
 	void print_usage(const std::map<std::string, device_config> &catalog) {
 		std::println(stderr,
-					 "usage: shader_explorer [--gpu <key>] [--lang <auto|slang|glsl>] [--target "
+					 "usage: shader_explorer [--version] [--gpu <key>] [--lang <auto|slang|glsl>] [--target "
 					 "<info|spirv|final_nir|asm>] "
 					 "[--binding-model <classic|push_descriptor|descriptor_buffer>] "
 					 "[--spirv-target <max|1.0|1.1|1.2|1.3|1.4|1.5|1.6>] "
-					 "[--subgroup-size <n>] [--require-full-subgroups] "
-					 "[--mesa-build-root <path>] "
+					 "[--subgroup-size <n>] [--require-full-subgroups] [--no-color] "
 					 "[--output <-|file>] [--list-gpus] "
 					 "<shader.slang|shader.glsl>\n"
 					 "\n"
 					 "options:\n"
+					 "  --version        print program version and exit\n"
 					 "  --list-gpus      list available GPU presets\n"
 					 "  --gpu <key>      select a GPU preset (default: auto)\n"
 					 "  --lang <l>       source language: auto, slang, glsl (default: auto)\n"
@@ -1160,8 +1160,7 @@ namespace {
 					 "  --subgroup-size <n> request VK_EXT_subgroup_size_control required subgroup size for compute "
 					 "stage\n"
 					 "  --require-full-subgroups  request full-subgroup dispatch behavior for compute stage\n"
-					 "  --mesa-build-root <path>  Mesa build root containing src/*/vulkan drivers (default: "
-					 "build/subprojects/mesa)\n"
+					 "  --no-color       disable ANSI color in text output\n"
 					 "  --output <path>  output destination: - (stdout) or file path (default: -)\n"
 					 "\n"
 					 "available GPUs:");
@@ -1333,6 +1332,10 @@ namespace {
 				options.require_full_subgroups = true;
 				continue;
 			}
+			if (arg == "--no-color") {
+				options.no_color = true;
+				continue;
+			}
 			if (arg == "--lang") {
 				if (i + 1 >= argc) {
 					std::println(stderr, "--lang requires a value");
@@ -1342,14 +1345,6 @@ namespace {
 					std::println(stderr, "invalid --lang value, expected one of: auto, slang, glsl");
 					return 1;
 				}
-				continue;
-			}
-			if (arg == "--mesa-build-root") {
-				if (i + 1 >= argc) {
-					std::println(stderr, "--mesa-build-root requires a value");
-					return 1;
-				}
-				options.mesa_build_root = fs::path(argv[++i]);
 				continue;
 			}
 			if (arg == "--output") {
@@ -1493,11 +1488,11 @@ namespace {
 		if (options.require_full_subgroups) { args.emplace_back("--require-full-subgroups"); }
 	}
 
-	int handle_info_target(const CliOptions &options, const device_config &active_config,
-						   const fs::path &mesa_build_root, const char *argv0) {
+	int handle_info_target(const CliOptions &options, const device_config &active_config, const char *argv0) {
 		std::string info_text;
-		if (!active_config.shim_rel.empty() && !options.internal_shim_ready) {
-			fs::path const			 shim_path	= mesa_build_root / active_config.shim_rel;
+		if (!active_config.shim_file.empty() && !options.internal_shim_ready) {
+			fs::path const installed_libdir = default_mesa_libdir();
+			fs::path const shim_path = resolve_installed_library_path(installed_libdir, active_config.shim_file);
 			std::vector<std::string> child_args = {"--internal-mode", "info", "--internal-shim-ready"};
 			append_runtime_selection_args(options, active_config, child_args);
 			ChildResponse const child = run_internal_child_with_shim(argv0, shim_path, child_args);
@@ -1512,12 +1507,12 @@ namespace {
 		return write_text_output(options.output_path, info_text) ? 0 : 1;
 	}
 
-	bool query_max_supported_spirv(const CliOptions &options, const device_config &active_config,
-								   const fs::path &mesa_build_root, const char *argv0,
+	bool query_max_supported_spirv(const CliOptions &options, const device_config &active_config, const char *argv0,
 								   SpirvTargetVersion &out_version) {
 		out_version = SpirvTargetVersion::V10;
-		if (!active_config.shim_rel.empty() && !options.internal_shim_ready) {
-			fs::path const			 shim_path	= mesa_build_root / active_config.shim_rel;
+		if (!active_config.shim_file.empty() && !options.internal_shim_ready) {
+			fs::path const installed_libdir = default_mesa_libdir();
+			fs::path const shim_path = resolve_installed_library_path(installed_libdir, active_config.shim_file);
 			std::vector<std::string> child_args = {"--internal-mode", "spirv-max", "--internal-shim-ready"};
 			append_runtime_selection_args(options, active_config, child_args);
 			ChildResponse const child = run_internal_child_with_shim(argv0, shim_path, child_args);
@@ -1573,9 +1568,9 @@ namespace {
 		return false;
 	}
 
-	int handle_pipeline_target(const CliOptions &options, const device_config &active_config,
-							   const fs::path &mesa_build_root, const char *argv0, const std::vector<uint32_t> &spirv) {
-		if (!active_config.shim_rel.empty() && !options.internal_shim_ready) {
+	int handle_pipeline_target(const CliOptions &options, const device_config &active_config, const char *argv0,
+							   const std::vector<uint32_t> &spirv) {
+		if (!active_config.shim_file.empty() && !options.internal_shim_ready) {
 			SpirvSharedMemory spirv_mem;
 			if (!create_spirv_shared_memory(spirv, spirv_mem)) {
 				std::println(stderr, "failed to prepare shared-memory SPIR-V payload for child runtime");
@@ -1596,7 +1591,8 @@ namespace {
 			std::vector<std::string> child_args_with_config = child_args;
 			append_runtime_selection_args(options, active_config, child_args_with_config);
 
-			fs::path const		shim_path = mesa_build_root / active_config.shim_rel;
+			fs::path const installed_libdir = default_mesa_libdir();
+			fs::path const shim_path = resolve_installed_library_path(installed_libdir, active_config.shim_file);
 			ChildResponse const child	  = run_internal_child_with_shim(argv0, shim_path, child_args_with_config);
 			close(spirv_mem.fd);
 			if (report_child_failure("dumping pipeline", child) != 0) { return 1; }
@@ -1624,10 +1620,8 @@ int main(int argc, char **argv) {
 		if (std::optional<int> parse_exit = parse_cli_options(argc, argv, catalog, options); parse_exit.has_value()) {
 			return *parse_exit;
 		}
-		fs::path const mesa_build_root = resolve_mesa_build_root(options);
-		if (mesa_build_root.empty()) {
-			std::println(stderr,
-						 "failed to resolve Mesa build root: set --mesa-build-root or SHADER_EXPLORER_MESA_BUILD_ROOT");
+		if (default_mesa_libdir().empty() || default_vulkan_icd_dir().empty()) {
+			std::println(stderr, "failed to resolve installed Mesa runtime directories");
 			return 1;
 		}
 		if (std::optional<int> internal_exit = maybe_handle_internal_mode(options); internal_exit.has_value()) {
@@ -1647,14 +1641,14 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 		device_config const active_config = config_it->second;
-		if (!configure_gpu_environment(mesa_build_root, active_config, options.internal_shim_ready)) { return 1; }
+		if (!configure_gpu_environment(active_config, options.internal_shim_ready)) { return 1; }
 
 		if (options.output_target == OutputTarget::Info) {
-			return handle_info_target(options, active_config, mesa_build_root, argv[0]);
+			return handle_info_target(options, active_config, argv[0]);
 		}
 
 		SpirvTargetVersion max_supported_spirv = SpirvTargetVersion::V10;
-		if (!query_max_supported_spirv(options, active_config, mesa_build_root, argv[0], max_supported_spirv)) {
+		if (!query_max_supported_spirv(options, active_config, argv[0], max_supported_spirv)) {
 			return 1;
 		}
 		SpirvTargetVersion active_spirv_target = SpirvTargetVersion::V10;
@@ -1676,11 +1670,12 @@ int main(int argc, char **argv) {
 
 		if (options.output_target == OutputTarget::Spirv) {
 			std::string disassembly;
-			if (!run_spirv_dis(spirv_optimized, disassembly)) { return 1; }
+			bool const use_color = !options.no_color && options.output_path == "-";
+			if (!run_spirv_dis(spirv_optimized, use_color, disassembly)) { return 1; }
 			return write_text_output(options.output_path, disassembly) ? 0 : 1;
 		}
 
-		return handle_pipeline_target(options, active_config, mesa_build_root, argv[0], spirv_optimized);
+		return handle_pipeline_target(options, active_config, argv[0], spirv_optimized);
 	} catch (const std::format_error &e) {
 		std::println(stderr, "format error: {}", e.what());
 		return 2;

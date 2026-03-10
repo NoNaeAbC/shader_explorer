@@ -3,43 +3,45 @@
 
 Compile glsl and slang compute shaders to assembly
 
-## Example usage
+## Build And Install
 
-```
-$ build/shader_explorer --gpu intel-ptl test_shader/mat_mul.glsl --target asm
-```
+Meson is unable to use `import('cmake')` with Slang, so `./build_slang.sh` exists to build Slang before configuring this project.
 
-## Compilation
-
-Meson is unable to use "import('cmake')" with slang, thus you will have to build `build_slang.sh` first.
-
-```
-$ meson setup build
+```sh
+$ ./build_slang.sh
+$ meson setup build --prefix "$PWD/install"
 $ ninja -C build
+$ ninja -C build install
 ```
 
-To avoid incompatibility with future C++ compiler warnings you should use `-Dno_warnings=true` as meson build argument.
+The supported runtime entry point is `install/bin/shader_explorer`. It uses the installed Mesa layout under the configured prefix and reads Vulkan ICD JSON files from `install/share/vulkan/icd.d` and shim libraries from `install/lib64`.
 
-## Usage
+## Example Usage
 
+```sh
+$ install/bin/shader_explorer --gpu intel-tgl test_shader/complex_compute.slang
 ```
-$ build/shader_explorer --help
-usage: shader_explorer [--gpu <key>] [--lang <auto|slang|glsl>] [--target <info|spirv|final_nir|asm>] [--binding-model <classic|push_descriptor|descriptor_buffer>] [--spirv-target <max|1.0|1.1|1.2|1.3|1.4|1.5|1.6>] [--subgroup-size <n>] [--require-full-subgroups] [--mesa-build-root <path>] [--output <-|file>] [--list-gpus] <shader.slang|shader.glsl>
 
-options:
-  --list-gpus      list available GPU presets
-  --gpu <key>      select a GPU preset (default: auto)
-  --lang <l>       source language: auto, slang, glsl (default: auto)
-  --target <t>     output target: info, spirv, final_nir, asm (default: asm)
-  --binding-model <m>  runtime descriptor model: classic, push_descriptor, descriptor_buffer
-                       descriptor_heap is selected automatically when required by shader SPIR-V
-  --spirv-target <v>  SPIR-V target version: max or explicit 1.0..1.6 (default: max)
-  --subgroup-size <n> request VK_EXT_subgroup_size_control required subgroup size for compute stage
-  --require-full-subgroups  request full-subgroup dispatch behavior for compute stage
-  --mesa-build-root <path>  Mesa build root containing src/*/vulkan drivers (default: build/subprojects/mesa)
-  --output <path>  output destination: - (stdout) or file path (default: -)
+## CLI
 
-available GPUs:
+```text
+shader_explorer [--version] [--gpu <key>] [--lang <auto|slang|glsl>]
+                [--target <info|spirv|final_nir|asm>]
+                [--binding-model <classic|push_descriptor|descriptor_buffer>]
+                [--spirv-target <max|1.0|1.1|1.2|1.3|1.4|1.5|1.6>]
+                [--subgroup-size <n>] [--require-full-subgroups]
+                [--no-color] [--output <-|file>] [--list-gpus]
+                <shader.slang|shader.glsl>
+```
+
+Notable options:
+
+- `--version` prints the program version and exits.
+- `--list-gpus` prints the available GPU presets.
+- `--no-color` disables ANSI color in text output.
+- `--output <path>` writes output to a file; color is disabled automatically for file output.
+
+Available GPUs:
   amd-bonaire - AMD RADV (bonaire)
   amd-gfx1201 - AMD RADV (gfx1201)
   amd-navi10 - AMD RADV (navi10)

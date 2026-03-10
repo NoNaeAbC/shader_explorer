@@ -17,7 +17,6 @@ ninja    = find_program('ninja', required: true)
 
 cpp      = meson.get_compiler('cpp')
 threads  = dependency('threads', required: true)
-vulkan   = dependency('vulkan', required: true)
 dl       = cpp.find_library('dl', required: true)
 m        = cpp.find_library('m', required: true)
 
@@ -141,6 +140,21 @@ slang_dep = declare_dependency(
 )
 
 # -----------------------------------------------------------------------------
+# CMake subprojects: Vulkan-Headers and Vulkan-Loader
+# -----------------------------------------------------------------------------
+vulkan_headers_sp = cmake_mod.subproject('vulkan-headers')
+if not vulkan_headers_sp.found()
+  error('vulkan-headers subproject not found')
+endif
+vulkan_headers_dep = vulkan_headers_sp.dependency('Vulkan-Headers')
+
+vulkan_loader_sp = cmake_mod.subproject('vulkan-loader')
+if not vulkan_loader_sp.found()
+  error('vulkan-loader subproject not found')
+endif
+vulkan_loader_dep = vulkan_loader_sp.dependency('vulkan')
+
+# -----------------------------------------------------------------------------
 # CMake subproject: SPIRV-Tools (from wrap), static linkage
 # -----------------------------------------------------------------------------
 spirv_headers_opts = cmake_mod.subproject_options()
@@ -219,7 +233,8 @@ if glslang_sp.found()
 endif
 
 deps = [
-  vulkan,
+  vulkan_headers_dep,
+  vulkan_loader_dep,
   threads,
   dl,
   m,
@@ -242,12 +257,29 @@ executable(
     'src/vulkan_runtime.cpp',
   ),
   cpp_args : [
-    '-DSHADER_EXPLORER_DEFAULT_MESA_BUILD_ROOT="' + mesa_build_root + '"',
+    '-DSHADER_EXPLORER_VERSION="' + meson.project_version() + '"',
+    '-DSHADER_EXPLORER_DEFAULT_MESA_LIBDIR="' + join_paths(get_option('prefix'), get_option('libdir')) + '"',
+    '-DSHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR="' + join_paths(get_option('prefix'), get_option('datadir'), 'vulkan', 'icd.d') + '"',
   ] + strict_cpp_args,
   dependencies : deps,
   link_with : glslang_link_with,
   link_depends : [mesa_artifacts],
   build_by_default : true,
+  install_rpath : join_paths(get_option('prefix'), get_option('libdir')),
   install : true,
   install_dir : get_option('bindir'),
+)
+
+install_data(
+  [
+    join_paths(slang_lib_root, 'libslang-compiler.so'),
+    join_paths(slang_lib_root, 'libslang-compiler.so.0.2026.3.1'),
+    join_paths(slang_lib_root, 'libslang.so'),
+    join_paths(slang_lib_root, 'slang-core-module.bin'),
+    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so'),
+    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so.3'),
+    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so.3.0.2'),
+  ],
+  follow_symlinks : true,
+  install_dir : get_option('libdir'),
 )

@@ -2265,7 +2265,6 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 		(vkGetPipelineExecutableInternalRepresentationsKHR == nullptr)) {
 		return runtime_fail(RuntimeFailure::MissingPipelineExecutableFunctions);
 	}
-	std::vector<std::string> text_reprs;
 	VkPipelineInfoKHR const	 pipeline_info = {
 			 .sType	   = VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR,
 			 .pNext	   = nullptr,
@@ -2298,6 +2297,7 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 
 	vkGetPipelineExecutableInternalRepresentationsKHR(device, &exe_info, &repr_count, nullptr);
 
+	std::vector<std::optional<std::string>>			   text_reprs(repr_count);
 	std::vector<VkPipelineExecutableInternalRepresentationKHR> representations(repr_count);
 	std::vector<std::vector<char>>							   buffers(repr_count);
 	for (uint32_t repr_index = 0; repr_index < repr_count; ++repr_index) {
@@ -2326,8 +2326,12 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 	}
 
 	for (uint32_t repr_index = 0; repr_index < repr_count; ++repr_index) {
-		std::string repr_string(buffers[repr_index].begin(), buffers[repr_index].end());
-		if (representations[repr_index].isText != 0U) { text_reprs.push_back(std::move(repr_string)); }
+		if (representations[repr_index].isText == 0U) { continue; }
+
+		size_t repr_size = buffers[repr_index].size();
+		if (repr_size > 0 && buffers[repr_index][repr_size - 1] == '\0') { --repr_size; }
+
+		text_reprs[repr_index].emplace(buffers[repr_index].data(), repr_size);
 	}
 
 
@@ -2363,7 +2367,8 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 
 	for (uint32_t repr_index = 0; repr_index < repr_count; ++repr_index) {
 		if (std::ranges::contains(names_references, representations[repr_index].name)) {
-			out_text = text_reprs[repr_index];
+			if (!text_reprs[repr_index].has_value()) { continue; }
+			out_text = *text_reprs[repr_index];
 			goto done;
 		}
 	}
