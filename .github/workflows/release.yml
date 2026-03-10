@@ -1,0 +1,124 @@
+name: release
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-release:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison \
+            cmake \
+            flex \
+            git \
+            libclang-cpp-dev \
+            libclang-dev \
+            libdrm-dev \
+            libelf-dev \
+            libexpat1-dev \
+            liblmdb-dev \
+            libunwind-dev \
+            libwayland-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb-dri3-dev \
+            libxcb-glx0-dev \
+            libxcb-keysyms1-dev \
+            libxcb-present-dev \
+            libxcb-randr0-dev \
+            libxcb-render0-dev \
+            libxcb-shm0-dev \
+            libxcb-sync-dev \
+            libxcb-xfixes0-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxshmfence-dev \
+            libxxf86vm-dev \
+            libzstd-dev \
+            llvm-dev \
+            meson \
+            ninja-build \
+            pkg-config \
+            python3 \
+            python3-mako \
+            wayland-protocols \
+            zlib1g-dev
+
+      - name: Compute release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -n "s/.*version : '\\([^']*\\)'.*/\\1/p" meson.build | head -n 1)-${GITHUB_SHA::7}"
+          fi
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build Slang
+        run: ./build_slang.sh
+
+      - name: Configure Meson
+        run: meson setup build --prefix "${PWD}/install"
+
+      - name: Build project
+        run: ninja -C build
+
+      - name: Install project
+        run: ninja -C build install
+
+      - name: Package release archive
+        id: package
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x tools/package_release.sh
+          archive="$(./tools/package_release.sh "${{ steps.version.outputs.value }}" linux x86_64 "${PWD}/install" "${PWD}/dist")"
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+
+      - name: Smoke test packaged tree
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage_dir="${PWD}/package-smoke-test"
+          rm -rf "${stage_dir}"
+          mkdir -p "${stage_dir}"
+          tar -xzf "${{ steps.package.outputs.archive }}" -C "${stage_dir}"
+          package_root="$(find "${stage_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          "${package_root}/bin/shader_explorer" --version
+          "${package_root}/bin/shader_explorer" --gpu intel-tgl "${PWD}/test_shader/complex_compute.slang" > /dev/null
+
+      - name: Upload packaged artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shader_explorer-linux-x86_64
+          path: ${{ steps.package.outputs.archive }}
+
+      - name: Publish GitHub release asset
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.archive }}
