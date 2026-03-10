@@ -17,8 +17,7 @@ ninja    = find_program('ninja', required: true)
 
 cpp      = meson.get_compiler('cpp')
 threads  = dependency('threads', required: true)
-dl       = cpp.find_library('dl', required: true)
-m        = cpp.find_library('m', required: true)
+dl       = dependency('dl', required: true)
 
 strict_cpp_args = []
 if not get_option('no_warnings')
@@ -110,6 +109,8 @@ slang_build_root_external = slang_source_root / '__CMake_build_external'
 slang_include_root = slang_source_root / 'include'
 slang_generated_include_root = slang_build_root_external / 'source' / 'slang' / 'slang-version-header'
 slang_lib_root = slang_build_root_external / 'Release' / 'lib'
+slang_lz4_lib = slang_build_root_external / 'external' / 'lz4' / 'build' / 'cmake' / 'liblz4.a'
+slang_miniz_lib = slang_build_root_external / 'external' / 'miniz' / 'libminiz.a'
 
 if not fs.exists(slang_include_root / 'slang.h')
   error('Missing external Slang headers at ' + (slang_include_root / 'slang.h') +
@@ -119,24 +120,40 @@ if not fs.exists(slang_generated_include_root / 'slang-tag-version.h')
   error('Missing generated Slang headers at ' + (slang_generated_include_root / 'slang-tag-version.h') +
     '\nRun ./build_slang.sh before: meson setup build')
 endif
-if not fs.exists(slang_lib_root / 'libslang-compiler.so')
-  error('Missing external Slang library at ' + (slang_lib_root / 'libslang-compiler.so') +
+if not fs.exists(slang_lib_root / 'libslang-compiler.a')
+  error('Missing external Slang library at ' + (slang_lib_root / 'libslang-compiler.a') +
     '\nRun ./build_slang.sh before: meson setup build')
 endif
-
-slang_compiler_lib = cpp.find_library(
-  'slang-compiler',
-  dirs : [slang_lib_root],
-  required : true,
-)
+if not fs.exists(slang_lib_root / 'libcompiler-core.a')
+  error('Missing external Slang library at ' + (slang_lib_root / 'libcompiler-core.a') +
+    '\nRun ./build_slang.sh before: meson setup build')
+endif
+if not fs.exists(slang_lib_root / 'libcore.a')
+  error('Missing external Slang library at ' + (slang_lib_root / 'libcore.a') +
+    '\nRun ./build_slang.sh before: meson setup build')
+endif
+if not fs.exists(slang_miniz_lib)
+  error('Missing external Slang library at ' + slang_miniz_lib +
+    '\nRun ./build_slang.sh before: meson setup build')
+endif
+if not fs.exists(slang_lz4_lib)
+  error('Missing external Slang library at ' + slang_lz4_lib +
+    '\nRun ./build_slang.sh before: meson setup build')
+endif
 
 slang_dep = declare_dependency(
   compile_args : [
     '-I' + slang_include_root,
     '-I' + slang_generated_include_root,
   ],
-  dependencies : [slang_compiler_lib],
-  link_args : ['-Wl,-rpath,' + slang_lib_root],
+  link_args : [
+    join_paths(slang_lib_root, 'libcore.a'),
+    join_paths(slang_lib_root, 'libslang-compiler.a'),
+    join_paths(slang_lib_root, 'libcompiler-core.a'),
+    join_paths(slang_lib_root, 'libcore.a'),
+    slang_miniz_lib,
+    slang_lz4_lib,
+  ],
 )
 
 # -----------------------------------------------------------------------------
@@ -237,7 +254,6 @@ deps = [
   vulkan_loader_dep,
   threads,
   dl,
-  m,
   slang_dep,
   spirv_tools_dep,
   spirv_tools_opt_dep,
@@ -258,28 +274,33 @@ executable(
   ),
   cpp_args : [
     '-DSHADER_EXPLORER_VERSION="' + meson.project_version() + '"',
-    '-DSHADER_EXPLORER_DEFAULT_MESA_LIBDIR="' + join_paths(get_option('prefix'), get_option('libdir')) + '"',
-    '-DSHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR="' + join_paths(get_option('prefix'), get_option('datadir'), 'vulkan', 'icd.d') + '"',
+    '-DSHADER_EXPLORER_INSTALL_LIBDIR="' + get_option('libdir') + '"',
+    '-DSHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR="' + join_paths(get_option('datadir'), 'vulkan', 'icd.d') + '"',
   ] + strict_cpp_args,
   dependencies : deps,
   link_with : glslang_link_with,
   link_depends : [mesa_artifacts],
   build_by_default : true,
-  install_rpath : join_paths(get_option('prefix'), get_option('libdir')),
+  install_rpath : '$ORIGIN/../' + get_option('libdir'),
   install : true,
   install_dir : get_option('bindir'),
 )
 
 install_data(
   [
-    join_paths(slang_lib_root, 'libslang-compiler.so'),
-    join_paths(slang_lib_root, 'libslang-compiler.so.0.2026.3.1'),
-    join_paths(slang_lib_root, 'libslang.so'),
     join_paths(slang_lib_root, 'slang-core-module.bin'),
-    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so'),
-    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so.3'),
-    join_paths(slang_source_root, '__CMake_build_external', 'external', 'miniz', 'libminiz.so.3.0.2'),
   ],
   follow_symlinks : true,
   install_dir : get_option('libdir'),
+)
+
+# Mesa installs ICD manifests with absolute library_path entries. This project
+# wants the installed tree to remain relocatable, but the fix must stay in the
+# top-level build rather than patching Mesa's subproject files, so rewrite only
+# the installed ICD manifests after `ninja -C build install`.
+meson.add_install_script(
+  find_program('python3'),
+  files('tools/relocate_icd_manifests.py'),
+  join_paths(get_option('prefix'), get_option('libdir')),
+  join_paths(get_option('prefix'), get_option('datadir'), 'vulkan', 'icd.d'),
 )

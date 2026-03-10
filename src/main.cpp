@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -220,11 +221,11 @@ namespace {
 		return parse_spirv_target_arg(trimmed_tex, mode, out_version) && mode == SpirvTargetMode::Explicit;
 	}
 
-#ifndef SHADER_EXPLORER_DEFAULT_MESA_LIBDIR
-#define SHADER_EXPLORER_DEFAULT_MESA_LIBDIR ""
+#ifndef SHADER_EXPLORER_INSTALL_LIBDIR
+#define SHADER_EXPLORER_INSTALL_LIBDIR ""
 #endif
-#ifndef SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR
-#define SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR ""
+#ifndef SHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR
+#define SHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR ""
 #endif
 
 	struct SpirvSharedMemory {
@@ -712,18 +713,33 @@ namespace {
 		return response;
 	}
 
+	fs::path installed_prefix() {
+		std::error_code ec;
+		fs::path const exe_path = fs::read_symlink("/proc/self/exe", ec);
+		if (ec) { return {}; }
+
+		fs::path const bindir = exe_path.parent_path();
+		if (bindir.empty()) { return {}; }
+		return bindir.parent_path();
+	}
+
+	fs::path resolve_installed_subdir(std::string_view configured_subdir) {
+		if (configured_subdir.empty()) { return {}; }
+
+		fs::path const subdir(configured_subdir);
+		if (subdir.is_absolute()) { return subdir; }
+
+		fs::path const prefix = installed_prefix();
+		if (prefix.empty()) { return {}; }
+		return prefix / subdir;
+	}
+
 	fs::path default_mesa_libdir() {
-		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_MESA_LIBDIR).empty()) {
-			return {SHADER_EXPLORER_DEFAULT_MESA_LIBDIR};
-		}
-		return {};
+		return resolve_installed_subdir(SHADER_EXPLORER_INSTALL_LIBDIR);
 	}
 
 	fs::path default_vulkan_icd_dir() {
-		if constexpr (!std::string_view(SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR).empty()) {
-			return {SHADER_EXPLORER_DEFAULT_VULKAN_ICD_DIR};
-		}
-		return {};
+		return resolve_installed_subdir(SHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR);
 	}
 
 	fs::path resolve_installed_library_path(const fs::path &installed_libdir, std::string_view library_file) {
