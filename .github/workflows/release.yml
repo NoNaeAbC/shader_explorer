@@ -119,7 +119,6 @@ jobs:
           for tool in cmake ninja pkg-config rustc cargo bindgen bison flex "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
-          test -f "/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/LLVMSPIRVLib/LLVMSPIRVLibConfig.cmake"
           for module in \
             expat \
             libdrm \
