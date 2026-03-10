@@ -15,12 +15,26 @@ permissions:
 jobs:
   build-linux-release:
     runs-on: ubuntu-24.04
+    env:
+      LLVM_VERSION: '19'
+      LLVM_CONFIG: llvm-config-19
 
     steps:
       - name: Check out sources
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Configure LLVM apt repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl gpg
+          curl --fail -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | \
+            gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | \
+            sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
 
       - name: Install build dependencies
         run: |
@@ -30,16 +44,21 @@ jobs:
             cmake \
             flex \
             git \
-            libclang-cpp-dev \
-            libclang-dev \
+            glslang-tools \
+            clang-${LLVM_VERSION} \
+            libclang-${LLVM_VERSION}-dev \
+            libclang-cpp${LLVM_VERSION}-dev \
+            libclc-${LLVM_VERSION}-dev \
             libdrm-dev \
             libelf-dev \
             libexpat1-dev \
+            libllvmspirvlib-${LLVM_VERSION}-dev \
             liblmdb-dev \
             libunwind-dev \
             libwayland-dev \
             libx11-dev \
             libx11-xcb-dev \
+            libxcb1-dev \
             libxcb-dri3-dev \
             libxcb-glx0-dev \
             libxcb-keysyms1-dev \
@@ -50,18 +69,18 @@ jobs:
             libxcb-sync-dev \
             libxcb-xfixes0-dev \
             libxext-dev \
+            libxfixes-dev \
             libxrandr-dev \
             libxshmfence-dev \
             libxxf86vm-dev \
             libzstd-dev \
-            llvm-dev \
+            lld-${LLVM_VERSION} \
+            llvm-${LLVM_VERSION}-dev \
             ninja-build \
             pkg-config \
-            cargo \
             python3 \
             python3-pip \
             python3-mako \
-            rustc \
             wayland-protocols \
             zlib1g-dev
 
@@ -73,15 +92,58 @@ jobs:
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           meson --version
 
+      - name: Install Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+
       - name: Install bindgen
         shell: bash
         run: |
           set -euo pipefail
-          cargo install bindgen-cli
+          cargo install --locked bindgen-cli --version 0.71.1
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
 
       - name: Verify bindgen
         run: bindgen --help >/dev/null
+
+      - name: Verify external build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          glslangValidator --version
+          "${LLVM_CONFIG}" --version
+          clang-${LLVM_VERSION} --version
+          rustc --version
+          cargo --version
+          bindgen --version
+          python3 -c 'import mako'
+          for tool in cmake ninja pkg-config rustc cargo bindgen bison flex "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+            command -v "${tool}" >/dev/null
+          done
+          find /usr/lib -path '*/cmake/LLVMSPIRVLib/LLVMSPIRVLibConfig.cmake' -print -quit | grep -q .
+          for module in \
+            expat \
+            libdrm \
+            libelf \
+            libunwind \
+            libzstd \
+            wayland-client \
+            wayland-server \
+            x11 \
+            x11-xcb \
+            xcb \
+            xcb-dri3 \
+            xcb-glx \
+            xcb-present \
+            xcb-randr \
+            xcb-shm \
+            xcb-sync \
+            xcb-xfixes \
+            xext \
+            xrandr \
+            xshmfence \
+            zlib; do
+            pkg-config --exists "${module}"
+          done
 
       - name: Compute release version
         id: version
