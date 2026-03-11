@@ -145,12 +145,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v bindgen >/dev/null; then
-            cargo install --locked bindgen-cli --version 0.72.1
-          fi
-          if ! command -v cbindgen >/dev/null; then
-            cargo install --locked cbindgen --version 0.29.2
-          fi
+          cargo install --locked bindgen-cli --version 0.72.1 --force
+          cargo install --locked cbindgen --version 0.29.2 --force
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
 
       - name: Verify Rust binding tools
@@ -265,6 +261,9 @@ jobs:
 
       - name: Configure Meson
         run: meson setup build --prefix "${PWD}/install"
+
+      - name: Validate Nouveau bindgen target
+        run: ninja -C build -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
 
       - name: Build project
         run: ninja -C build
