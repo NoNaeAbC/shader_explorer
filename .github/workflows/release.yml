@@ -27,13 +27,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Compute Slang cache key
-        id: slang-cache-key
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "commit=$(git -C slang rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
-
       - name: Cache pip downloads
         uses: actions/cache@v4
         with:
@@ -53,13 +46,6 @@ jobs:
         with:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-cargo-bin-${{ hashFiles('.github/workflows/release.yml') }}
-
-      - name: Cache Slang build
-        id: slang-cache
-        uses: actions/cache@v4
-        with:
-          path: slang/__CMake_build_external
-          key: ${{ runner.os }}-slang-${{ steps.slang-cache-key.outputs.commit }}-${{ hashFiles('build_slang.sh') }}
 
       - name: Configure LLVM apt repository
         shell: bash
@@ -210,6 +196,41 @@ jobs:
           fi
           echo "value=${version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Configure Meson debug build before Slang
+        run: meson setup build-debug --prefix "${PWD}/install" -Dci_debug_without_slang=true
+
+      - name: Debug Nouveau bindgen environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          env | sort
+          bindgen --version
+          cbindgen --version
+          rustc --version
+          cargo --version
+          clang-${LLVM_VERSION} --version
+          "${LLVM_CONFIG}" --version
+          echo | clang-${LLVM_VERSION} -dM -E -x c - | grep STDC || true
+          printf '#include <stdatomic.h>\n' | clang-${LLVM_VERSION} -E -H -x c - >/dev/null
+          ninja -C build-debug -t commands subprojects/mesa/src/nouveau/compiler/nak_bindings.rs | tail -n 1
+
+      - name: Validate Nouveau bindgen target before Slang
+        run: ninja -C build-debug -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
+
+      - name: Compute Slang cache key
+        id: slang-cache-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "commit=$(git -C slang rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Slang build
+        id: slang-cache
+        uses: actions/cache@v4
+        with:
+          path: slang/__CMake_build_external
+          key: ${{ runner.os }}-slang-${{ steps.slang-cache-key.outputs.commit }}-${{ hashFiles('build_slang.sh') }}
+
       - name: Verify Slang artifacts
         id: slang-artifacts
         shell: bash
@@ -261,9 +282,6 @@ jobs:
 
       - name: Configure Meson
         run: meson setup build --prefix "${PWD}/install"
-
-      - name: Validate Nouveau bindgen target
-        run: ninja -C build -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
 
       - name: Build project
         run: ninja -C build

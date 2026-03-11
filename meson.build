@@ -104,6 +104,8 @@ mesa_artifacts = custom_target(
 # -----------------------------------------------------------------------------
 # External Slang build (./slang, prepared by build_slang.sh)
 # -----------------------------------------------------------------------------
+ci_debug_without_slang = get_option('ci_debug_without_slang')
+
 slang_source_root = source_root / 'slang'
 slang_build_root_external = slang_source_root / '__CMake_build_external'
 slang_include_root = slang_source_root / 'include'
@@ -112,49 +114,54 @@ slang_lib_root = slang_build_root_external / 'Release' / 'lib'
 slang_lz4_lib = slang_build_root_external / 'external' / 'lz4' / 'build' / 'cmake' / 'liblz4.a'
 slang_miniz_lib = slang_build_root_external / 'external' / 'miniz' / 'libminiz.a'
 
-if not fs.exists(slang_include_root / 'slang.h')
-  error('Missing external Slang headers at ' + (slang_include_root / 'slang.h') +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_generated_include_root / 'slang-tag-version.h')
-  error('Missing generated Slang headers at ' + (slang_generated_include_root / 'slang-tag-version.h') +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_lib_root / 'libslang-compiler.a')
-  error('Missing external Slang library at ' + (slang_lib_root / 'libslang-compiler.a') +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_lib_root / 'libcompiler-core.a')
-  error('Missing external Slang library at ' + (slang_lib_root / 'libcompiler-core.a') +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_lib_root / 'libcore.a')
-  error('Missing external Slang library at ' + (slang_lib_root / 'libcore.a') +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_miniz_lib)
-  error('Missing external Slang library at ' + slang_miniz_lib +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
-if not fs.exists(slang_lz4_lib)
-  error('Missing external Slang library at ' + slang_lz4_lib +
-    '\nRun ./build_slang.sh before: meson setup build')
-endif
+slang_dep = declare_dependency()
+if ci_debug_without_slang
+  message('Skipping external Slang validation because -Dci_debug_without_slang=true')
+else
+  if not fs.exists(slang_include_root / 'slang.h')
+    error('Missing external Slang headers at ' + (slang_include_root / 'slang.h') +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_generated_include_root / 'slang-tag-version.h')
+    error('Missing generated Slang headers at ' + (slang_generated_include_root / 'slang-tag-version.h') +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_lib_root / 'libslang-compiler.a')
+    error('Missing external Slang library at ' + (slang_lib_root / 'libslang-compiler.a') +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_lib_root / 'libcompiler-core.a')
+    error('Missing external Slang library at ' + (slang_lib_root / 'libcompiler-core.a') +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_lib_root / 'libcore.a')
+    error('Missing external Slang library at ' + (slang_lib_root / 'libcore.a') +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_miniz_lib)
+    error('Missing external Slang library at ' + slang_miniz_lib +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
+  if not fs.exists(slang_lz4_lib)
+    error('Missing external Slang library at ' + slang_lz4_lib +
+      '\nRun ./build_slang.sh before: meson setup build')
+  endif
 
-slang_dep = declare_dependency(
-  compile_args : [
-    '-I' + slang_include_root,
-    '-I' + slang_generated_include_root,
-  ],
-  link_args : [
-    join_paths(slang_lib_root, 'libcore.a'),
-    join_paths(slang_lib_root, 'libslang-compiler.a'),
-    join_paths(slang_lib_root, 'libcompiler-core.a'),
-    join_paths(slang_lib_root, 'libcore.a'),
-    slang_miniz_lib,
-    slang_lz4_lib,
-  ],
-)
+  slang_dep = declare_dependency(
+    compile_args : [
+      '-I' + slang_include_root,
+      '-I' + slang_generated_include_root,
+    ],
+    link_args : [
+      join_paths(slang_lib_root, 'libcore.a'),
+      join_paths(slang_lib_root, 'libslang-compiler.a'),
+      join_paths(slang_lib_root, 'libcompiler-core.a'),
+      join_paths(slang_lib_root, 'libcore.a'),
+      slang_miniz_lib,
+      slang_lz4_lib,
+    ],
+  )
+endif
 
 # -----------------------------------------------------------------------------
 # CMake subprojects: Vulkan-Headers and Vulkan-Loader
@@ -414,26 +421,28 @@ spirv_headers_inc = include_directories('subprojects/spirv-headers/include')
 # -----------------------------------------------------------------------------
 # Final executable
 # -----------------------------------------------------------------------------
-executable(
-  'shader_explorer',
-  files(
-    'src/main.cpp',
-    'src/vulkan_runtime.cpp',
-  ),
-  cpp_args : [
-    '-DSHADER_EXPLORER_VERSION="' + meson.project_version() + '"',
-    '-DSHADER_EXPLORER_INSTALL_LIBDIR="' + get_option('libdir') + '"',
-    '-DSHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR="' + join_paths(get_option('datadir'), 'vulkan', 'icd.d') + '"',
-  ] + strict_cpp_args,
-  include_directories : spirv_headers_inc,
-  dependencies : deps,
-  link_with : glslang_link_with,
-  link_depends : [mesa_artifacts],
-  build_by_default : true,
-  install_rpath : '$ORIGIN/../' + get_option('libdir'),
-  install : true,
-  install_dir : get_option('bindir'),
-)
+if not ci_debug_without_slang
+  executable(
+    'shader_explorer',
+    files(
+      'src/main.cpp',
+      'src/vulkan_runtime.cpp',
+    ),
+    cpp_args : [
+      '-DSHADER_EXPLORER_VERSION="' + meson.project_version() + '"',
+      '-DSHADER_EXPLORER_INSTALL_LIBDIR="' + get_option('libdir') + '"',
+      '-DSHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR="' + join_paths(get_option('datadir'), 'vulkan', 'icd.d') + '"',
+    ] + strict_cpp_args,
+    include_directories : spirv_headers_inc,
+    dependencies : deps,
+    link_with : glslang_link_with,
+    link_depends : [mesa_artifacts],
+    build_by_default : true,
+    install_rpath : '$ORIGIN/../' + get_option('libdir'),
+    install : true,
+    install_dir : get_option('bindir'),
+  )
+endif
 
 # Mesa installs ICD manifests with absolute library_path entries. This project
 # wants the installed tree to remain relocatable, but the fix must stay in the
