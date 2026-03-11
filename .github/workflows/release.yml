@@ -18,6 +18,7 @@ jobs:
     env:
       LLVM_VERSION: '20'
       LLVM_CONFIG: llvm-config-20
+      CLANG_PATH: /usr/lib/llvm-20/bin/clang
       CC: gcc-14
       CXX: g++-14
 
@@ -212,11 +213,10 @@ jobs:
           "${LLVM_CONFIG}" --version
           ldd "$(command -v bindgen)" || true
           printf 'LIBCLANG_PATH=%s\n' "${LIBCLANG_PATH-}"
+          printf 'CLANG_PATH=%s\n' "${CLANG_PATH-}"
           printf 'CPATH=%s\n' "${CPATH-}"
           printf 'C_INCLUDE_PATH=%s\n' "${C_INCLUDE_PATH-}"
           printf 'CPLUS_INCLUDE_PATH=%s\n' "${CPLUS_INCLUDE_PATH-}"
-          printf 'BINDGEN_EXTRA_CLANG_ARGS=%s\n' "${BINDGEN_EXTRA_CLANG_ARGS-}"
-          printf 'BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_gnu=%s\n' "${BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_gnu-}"
           echo | clang-${LLVM_VERSION} -v -E -x c -
           echo | clang-${LLVM_VERSION} -dM -E -x c - | grep STDC || true
           printf '#include <stdatomic.h>\n' | clang-${LLVM_VERSION} -E -H -x c - >/dev/null
@@ -248,8 +248,6 @@ jobs:
           printf '%s\n' "${cmd}"
 
       - name: Validate Nouveau bindgen target before Slang
-        env:
-          BINDGEN_EXTRA_CLANG_ARGS: -std=c11
         run: ninja -C build-debug -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
 
       - name: Compute Slang cache key
