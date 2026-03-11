@@ -16,8 +16,8 @@ jobs:
   build-linux-release:
     runs-on: ubuntu-24.04
     env:
-      LLVM_VERSION: '19'
-      LLVM_CONFIG: llvm-config-19
+      LLVM_VERSION: '21'
+      LLVM_CONFIG: llvm-config-21
       CC: gcc-14
       CXX: g++-14
 
