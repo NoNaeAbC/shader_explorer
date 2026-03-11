@@ -341,14 +341,6 @@ executable(
   install_dir : get_option('bindir'),
 )
 
-install_data(
-  [
-    join_paths(slang_lib_root, 'slang-core-module.bin'),
-  ],
-  follow_symlinks : true,
-  install_dir : get_option('libdir'),
-)
-
 # Mesa installs ICD manifests with absolute library_path entries. This project
 # wants the installed tree to remain relocatable, but the fix must stay in the
 # top-level build rather than patching Mesa's subproject files, so rewrite only

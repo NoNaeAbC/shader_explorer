@@ -198,9 +198,54 @@ jobs:
           fi
           echo "value=${version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Verify Slang artifacts
+        id: slang-artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            "slang/include/slang.h"
+            "slang/__CMake_build_external/source/slang/slang-version-header/slang-tag-version.h"
+            "slang/__CMake_build_external/Release/lib/libslang-compiler.a"
+            "slang/__CMake_build_external/Release/lib/libcompiler-core.a"
+            "slang/__CMake_build_external/Release/lib/libcore.a"
+            "slang/__CMake_build_external/external/miniz/libminiz.a"
+            "slang/__CMake_build_external/external/lz4/build/cmake/liblz4.a"
+          )
+
+          missing=0
+          for path in "${required_files[@]}"; do
+            if [[ ! -e "${path}" ]]; then
+              echo "missing: ${path}"
+              missing=1
+            fi
+          done
+
+          if [[ "${missing}" -eq 0 ]]; then
+            echo "ready=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "ready=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Build Slang
-        if: steps.slang-cache.outputs.cache-hit != 'true'
-        run: ./build_slang.sh
+        if: steps.slang-cache.outputs.cache-hit != 'true' || steps.slang-artifacts.outputs.ready != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf slang/__CMake_build_external
+          ./build_slang.sh
+
+      - name: Re-verify Slang artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e slang/__CMake_build_external/source/slang/slang-version-header/slang-tag-version.h
+          test -e slang/__CMake_build_external/Release/lib/libslang-compiler.a
+          test -e slang/__CMake_build_external/Release/lib/libcompiler-core.a
+          test -e slang/__CMake_build_external/Release/lib/libcore.a
+          test -e slang/__CMake_build_external/external/miniz/libminiz.a
+          test -e slang/__CMake_build_external/external/lz4/build/cmake/liblz4.a
 
       - name: Configure Meson
         run: meson setup build --prefix "${PWD}/install"
