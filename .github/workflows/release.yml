@@ -18,7 +18,6 @@ jobs:
     env:
       LLVM_VERSION: '19'
       LLVM_CONFIG: llvm-config-19
-      BINDGEN_EXTRA_CLANG_ARGS: -std=gnu11
       CC: gcc-14
       CXX: g++-14
 
