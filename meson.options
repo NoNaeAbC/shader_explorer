@@ -11,3 +11,10 @@ option(
   value : false,
   description : 'Do not promote warnings to errors'
 )
+
+option(
+  'ci_debug_without_slang',
+  type : 'boolean',
+  value : false,
+  description : 'Skip external Slang validation and the final executable to debug CI failures before building Slang'
+)
