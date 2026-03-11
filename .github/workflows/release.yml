@@ -82,6 +82,7 @@ jobs:
             flex \
             gcc-14 \
             git \
+            glslang-tools \
             g++-14 \
             clang-${LLVM_VERSION} \
             libclang-${LLVM_VERSION}-dev \
@@ -174,7 +175,7 @@ jobs:
           bindgen --version
           cbindgen --version
           python3 -c 'import mako'
-          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
