@@ -19,8 +19,8 @@ jobs:
       LLVM_VERSION: '19'
       LLVM_CONFIG: llvm-config-19
       BINDGEN_EXTRA_CLANG_ARGS: -std=gnu11
-      CC: gcc-15
-      CXX: g++-15
+      CC: gcc-14
+      CXX: g++-14
 
     steps:
       - name: Check out sources
@@ -80,9 +80,9 @@ jobs:
             bison \
             cmake \
             flex \
-            gcc-15 \
+            gcc-14 \
             git \
-            g++-15 \
+            g++-14 \
             clang-${LLVM_VERSION} \
             libclang-${LLVM_VERSION}-dev \
             libclang-cpp${LLVM_VERSION}-dev \
@@ -165,8 +165,8 @@ jobs:
           set -euo pipefail
           glslangValidator --version
           "${LLVM_CONFIG}" --version
-          gcc-15 --version
-          g++-15 --version
+          gcc-14 --version
+          g++-14 --version
           clang-${LLVM_VERSION} --version
           rustc --version
           cargo --version
@@ -174,7 +174,7 @@ jobs:
           bindgen --version
           cbindgen --version
           python3 -c 'import mako'
-          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-15 g++-15 "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
