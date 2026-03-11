@@ -222,7 +222,10 @@ jobs:
           printf '#include <stdatomic.h>\n' | clang-${LLVM_VERSION} -E -H -x c - >/dev/null
           printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' | clang-${LLVM_VERSION} -x c -fsyntax-only -
           printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' > /tmp/atomics_probe.h
-          bindgen /tmp/atomics_probe.h -- -x c
+          LD_DEBUG=libs bindgen /tmp/atomics_probe.h --dump-preprocessed-input --emit-diagnostics -- -x c
+          ls -l __bindgen.i __bindgen.ii 2>/dev/null || true
+          head -n 80 __bindgen.i 2>/dev/null || true
+          head -n 80 __bindgen.ii 2>/dev/null || true
           cmd="$(ninja -C build-debug -t commands subprojects/mesa/src/nouveau/compiler/nak_bindings.rs | tail -n 1)"
           printf '%s\n' "${cmd}"
           (
