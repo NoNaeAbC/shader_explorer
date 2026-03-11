@@ -219,6 +219,11 @@ vulkan_loader_opts = cmake_mod.subproject_options()
 vulkan_loader_opts.add_cmake_defines({
   'VulkanHeaders_DIR': vulkan_headers_package_dir,
   'CMAKE_PREFIX_PATH': vulkan_headers_package_dir,
+  # Meson's CMake importer does not propagate the include usage requirements of
+  # the imported Vulkan::Headers target into the generated subproject compile
+  # commands, so vulkan-loader must receive the headers include dir explicitly.
+  'CMAKE_C_FLAGS': '-I' + (source_root / 'subprojects' / 'vulkan-headers' / 'include'),
+  'CMAKE_CXX_FLAGS': '-I' + (source_root / 'subprojects' / 'vulkan-headers' / 'include'),
 })
 vulkan_loader_sp = cmake_mod.subproject('vulkan-loader', options: vulkan_loader_opts)
 if not vulkan_loader_sp.found()
