@@ -255,6 +255,27 @@ endif
 spirv_tools_opts = cmake_mod.subproject_options()
 spirv_headers_root = source_root / 'subprojects' / 'spirv-headers'
 spirv_headers_include = spirv_headers_root / 'include'
+spirv_tools_opts.add_cmake_defines({
+  'BUILD_SHARED_LIBS': false,
+  'SPIRV_SKIP_TESTS': true,
+  'SPIRV_SKIP_EXECUTABLES': true,
+  'SPIRV-Headers_SOURCE_DIR': spirv_headers_root,
+  'CMAKE_C_FLAGS': '-I' + spirv_headers_include,
+  'CMAKE_CXX_FLAGS': '-I' + spirv_headers_include,
+})
+spirv_tools_sp = cmake_mod.subproject('spirv-tools', options: spirv_tools_opts)
+
+spirv_tools_dep = disabler()
+spirv_tools_opt_dep = disabler()
+
+if spirv_tools_sp.found()
+  spirv_tools_targets = spirv_tools_sp.target_list()
+  message('SPIRV-Tools: CMake targets: ' + ', '.join(spirv_tools_targets))
+
+  spirv_tools_dep = spirv_tools_sp.dependency('SPIRV-Tools-static')
+  spirv_tools_opt_dep = spirv_tools_sp.dependency('SPIRV-Tools-opt')
+endif
+
 if not fs.exists(spirv_tools_source_root / 'CMakeLists.txt')
   error('spirv-tools source root is missing at: ' + spirv_tools_source_root)
 endif
@@ -331,27 +352,6 @@ for src_name, dst_name in generated_pairs:
   spirv_tools_cmake_build_root,
   check : true,
 )
-
-spirv_tools_opts.add_cmake_defines({
-  'BUILD_SHARED_LIBS': false,
-  'SPIRV_SKIP_TESTS': true,
-  'SPIRV_SKIP_EXECUTABLES': true,
-  'SPIRV-Headers_SOURCE_DIR': spirv_headers_root,
-  'CMAKE_C_FLAGS': '-I' + spirv_headers_include,
-  'CMAKE_CXX_FLAGS': '-I' + spirv_headers_include,
-})
-spirv_tools_sp = cmake_mod.subproject('spirv-tools', options: spirv_tools_opts)
-
-spirv_tools_dep = disabler()
-spirv_tools_opt_dep = disabler()
-
-if spirv_tools_sp.found()
-  spirv_tools_targets = spirv_tools_sp.target_list()
-  message('SPIRV-Tools: CMake targets: ' + ', '.join(spirv_tools_targets))
-
-  spirv_tools_dep = spirv_tools_sp.dependency('SPIRV-Tools-static')
-  spirv_tools_opt_dep = spirv_tools_sp.dependency('SPIRV-Tools-opt')
-endif
 
 if not spirv_tools_dep.found()
   error('SPIRV-Tools static dependency not found in spirv-tools subproject')
