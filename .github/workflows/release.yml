@@ -210,9 +210,25 @@ jobs:
           cargo --version
           clang-${LLVM_VERSION} --version
           "${LLVM_CONFIG}" --version
+          ldd "$(command -v bindgen)" || true
+          printf 'LIBCLANG_PATH=%s\n' "${LIBCLANG_PATH-}"
+          printf 'CPATH=%s\n' "${CPATH-}"
+          printf 'C_INCLUDE_PATH=%s\n' "${C_INCLUDE_PATH-}"
+          printf 'CPLUS_INCLUDE_PATH=%s\n' "${CPLUS_INCLUDE_PATH-}"
+          printf 'BINDGEN_EXTRA_CLANG_ARGS=%s\n' "${BINDGEN_EXTRA_CLANG_ARGS-}"
+          printf 'BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_gnu=%s\n' "${BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_gnu-}"
+          echo | clang-${LLVM_VERSION} -v -E -x c -
           echo | clang-${LLVM_VERSION} -dM -E -x c - | grep STDC || true
           printf '#include <stdatomic.h>\n' | clang-${LLVM_VERSION} -E -H -x c - >/dev/null
-          ninja -C build-debug -t commands subprojects/mesa/src/nouveau/compiler/nak_bindings.rs | tail -n 1
+          printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' | clang-${LLVM_VERSION} -x c -fsyntax-only -
+          printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' > /tmp/atomics_probe.h
+          bindgen /tmp/atomics_probe.h -- -x c
+          cmd="$(ninja -C build-debug -t commands subprojects/mesa/src/nouveau/compiler/nak_bindings.rs | tail -n 1)"
+          printf '%s\n' "${cmd}"
+          (
+            cd build-debug
+            eval "${cmd}"
+          )
 
       - name: Validate Nouveau bindgen target before Slang
         run: ninja -C build-debug -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
