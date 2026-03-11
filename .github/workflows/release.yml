@@ -222,18 +222,34 @@ jobs:
           printf '#include <stdatomic.h>\n' | clang-${LLVM_VERSION} -E -H -x c - >/dev/null
           printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' | clang-${LLVM_VERSION} -x c -fsyntax-only -
           printf '#include <stdatomic.h>\natomic_uint_fast32_t x;\n' > /tmp/atomics_probe.h
-          LD_DEBUG=libs bindgen /tmp/atomics_probe.h --dump-preprocessed-input --emit-diagnostics -- -x c
-          ls -l __bindgen.i __bindgen.ii 2>/dev/null || true
-          head -n 80 __bindgen.i 2>/dev/null || true
-          head -n 80 __bindgen.ii 2>/dev/null || true
+          set +e
+          bindgen /tmp/atomics_probe.h -- -x c >/tmp/atomics_probe_default.rs 2>/tmp/atomics_probe_default.err
+          probe_default_status=$?
+          bindgen /tmp/atomics_probe.h -- -x c -std=c11 >/tmp/atomics_probe_c11.rs 2>/tmp/atomics_probe_c11.err
+          probe_c11_status=$?
+          bindgen /tmp/atomics_probe.h -- -x c -std=gnu11 >/tmp/atomics_probe_gnu11.rs 2>/tmp/atomics_probe_gnu11.err
+          probe_gnu11_status=$?
+          bindgen /tmp/atomics_probe.h -- -x c -std=c23 >/tmp/atomics_probe_c23.rs 2>/tmp/atomics_probe_c23.err
+          probe_c23_status=$?
+          LD_DEBUG=libs bindgen /tmp/atomics_probe.h -- -x c >/tmp/atomics_probe_lddebug.rs 2>/tmp/atomics_probe_lddebug.err
+          probe_lddebug_status=$?
+          set -e
+          echo "probe_default_status=${probe_default_status}"
+          cat /tmp/atomics_probe_default.err || true
+          echo "probe_c11_status=${probe_c11_status}"
+          cat /tmp/atomics_probe_c11.err || true
+          echo "probe_gnu11_status=${probe_gnu11_status}"
+          cat /tmp/atomics_probe_gnu11.err || true
+          echo "probe_c23_status=${probe_c23_status}"
+          cat /tmp/atomics_probe_c23.err || true
+          echo "probe_lddebug_status=${probe_lddebug_status}"
+          grep -E 'libclang|calling init' /tmp/atomics_probe_lddebug.err || true
           cmd="$(ninja -C build-debug -t commands subprojects/mesa/src/nouveau/compiler/nak_bindings.rs | tail -n 1)"
           printf '%s\n' "${cmd}"
-          (
-            cd build-debug
-            eval "${cmd}"
-          )
 
       - name: Validate Nouveau bindgen target before Slang
+        env:
+          BINDGEN_EXTRA_CLANG_ARGS: -std=c11
         run: ninja -C build-debug -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
 
       - name: Compute Slang cache key
