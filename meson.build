@@ -183,7 +183,8 @@ if vulkan_headers_version_path == ''
   error('Failed to resolve VulkanHeadersConfigVersion.cmake from the configured vulkan-headers subproject')
 endif
 
-vulkan_headers_package_dir = build_root / 'vulkan-headers-cmake-package'
+vulkan_loader_headers_prefix = build_root / 'subprojects' / 'vulkan-loader' / 'vulkan-headers-install'
+vulkan_headers_package_dir = vulkan_loader_headers_prefix / 'share' / 'cmake' / 'VulkanHeaders'
 run_command(
   python,
   '-c',
@@ -195,14 +196,22 @@ import sys
 package_dir = pathlib.Path(sys.argv[1])
 version_path = pathlib.Path(sys.argv[2])
 include_dir = pathlib.Path(sys.argv[3])
+registry_dir = pathlib.Path(sys.argv[4])
+install_prefix = pathlib.Path(sys.argv[5])
 
+if install_prefix.exists():
+    shutil.rmtree(install_prefix)
+
+(install_prefix / 'include').mkdir(parents=True, exist_ok=True)
+shutil.copytree(include_dir, install_prefix / 'include', dirs_exist_ok=True)
+shutil.copytree(registry_dir, install_prefix / 'share' / 'vulkan' / 'registry', dirs_exist_ok=True)
 package_dir.mkdir(parents=True, exist_ok=True)
 
 (package_dir / 'VulkanHeadersConfig.cmake').write_text(f"""\
 if(NOT TARGET Vulkan::Headers)
   add_library(Vulkan::Headers INTERFACE IMPORTED)
   set_target_properties(Vulkan::Headers PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES \"{include_dir}\"
+    INTERFACE_INCLUDE_DIRECTORIES \"{install_prefix / 'include'}\"
   )
 endif()
 """, encoding='utf-8')
@@ -212,18 +221,14 @@ shutil.copyfile(version_path, package_dir / 'VulkanHeadersConfigVersion.cmake')
   vulkan_headers_package_dir,
   vulkan_headers_version_path,
   source_root / 'subprojects' / 'vulkan-headers' / 'include',
+  source_root / 'subprojects' / 'vulkan-headers' / 'registry',
+  vulkan_loader_headers_prefix,
   check : true,
 )
 
 vulkan_loader_opts = cmake_mod.subproject_options()
 vulkan_loader_opts.add_cmake_defines({
-  'VulkanHeaders_DIR': vulkan_headers_package_dir,
-  'CMAKE_PREFIX_PATH': vulkan_headers_package_dir,
-  # Meson's CMake importer does not propagate the include usage requirements of
-  # the imported Vulkan::Headers target into the generated subproject compile
-  # commands, so vulkan-loader must receive the headers include dir explicitly.
-  'CMAKE_C_FLAGS': '-I' + (source_root / 'subprojects' / 'vulkan-headers' / 'include'),
-  'CMAKE_CXX_FLAGS': '-I' + (source_root / 'subprojects' / 'vulkan-headers' / 'include'),
+  'VULKAN_HEADERS_INSTALL_DIR': vulkan_loader_headers_prefix,
 })
 vulkan_loader_sp = cmake_mod.subproject('vulkan-loader', options: vulkan_loader_opts)
 if not vulkan_loader_sp.found()
@@ -234,6 +239,10 @@ vulkan_loader_dep = vulkan_loader_sp.dependency('vulkan')
 # -----------------------------------------------------------------------------
 # CMake subproject: SPIRV-Tools (from wrap), static linkage
 # -----------------------------------------------------------------------------
+spirv_tools_source_root = source_root / 'subprojects' / 'spirv-tools'
+spirv_tools_build_root = build_root / 'subprojects' / 'spirv-tools'
+spirv_tools_cmake_build_root = spirv_tools_build_root / '__CMake_build'
+
 spirv_headers_opts = cmake_mod.subproject_options()
 spirv_headers_opts.add_cmake_defines({
   'BUILD_TESTING': false,
@@ -246,6 +255,83 @@ endif
 spirv_tools_opts = cmake_mod.subproject_options()
 spirv_headers_root = source_root / 'subprojects' / 'spirv-headers'
 spirv_headers_include = spirv_headers_root / 'include'
+if not fs.exists(spirv_tools_source_root / 'CMakeLists.txt')
+  error('spirv-tools source root is missing at: ' + spirv_tools_source_root)
+endif
+
+run_command(
+  python,
+  '-c',
+  '''
+import pathlib
+import shutil
+import subprocess
+import sys
+
+spirv_tools_src = pathlib.Path(sys.argv[1])
+spirv_headers_inc = pathlib.Path(sys.argv[2])
+spirv_tools_build = pathlib.Path(sys.argv[3])
+spirv_tools_cmake_build = pathlib.Path(sys.argv[4])
+
+spirv_tools_build.mkdir(parents=True, exist_ok=True)
+spirv_tools_cmake_build.mkdir(parents=True, exist_ok=True)
+
+generated_pairs = [
+    ('core_tables_body.inc', 'core_tables_body.inc'),
+    ('core_tables_header.inc', 'core_tables_header.inc'),
+    ('generators.inc', 'generators.inc'),
+    ('build-version.inc', 'build-version.inc'),
+]
+
+ggt_cmd = [
+    sys.executable,
+    str(spirv_tools_src / 'utils' / 'ggt.py'),
+    '--core-tables-body-output=' + str(spirv_tools_cmake_build / 'core_tables_body.inc'),
+    '--core-tables-header-output=' + str(spirv_tools_cmake_build / 'core_tables_header.inc'),
+    '--spirv-core-grammar=' + str(spirv_headers_inc / 'spirv' / 'unified1' / 'spirv.core.grammar.json'),
+]
+for grammar in [
+    'extinst.glsl.std.450.grammar.json',
+    'extinst.opencl.std.100.grammar.json',
+    'extinst.spv-amd-shader-explicit-vertex-parameter.grammar.json',
+    'extinst.spv-amd-shader-trinary-minmax.grammar.json',
+    'extinst.spv-amd-gcn-shader.grammar.json',
+    'extinst.spv-amd-shader-ballot.grammar.json',
+    'extinst.debuginfo.grammar.json',
+    'extinst.nonsemantic.clspvreflection.grammar.json',
+    'extinst.nonsemantic.vkspreflection.grammar.json',
+    'extinst.arm.motion-engine.100.grammar.json',
+]:
+    ggt_cmd.append('--extinst=,' + str(spirv_headers_inc / 'spirv' / 'unified1' / grammar))
+ggt_cmd.append('--extinst=CLDEBUG100_,' + str(spirv_headers_inc / 'spirv' / 'unified1' / 'extinst.opencl.debuginfo.100.grammar.json'))
+ggt_cmd.append('--extinst=SHDEBUG100_,' + str(spirv_headers_inc / 'spirv' / 'unified1' / 'extinst.nonsemantic.shader.debuginfo.100.grammar.json'))
+ggt_cmd.append('--extinst=TOSA_,' + str(spirv_headers_inc / 'spirv' / 'unified1' / 'extinst.tosa.001000.1.grammar.json'))
+subprocess.run(ggt_cmd, check=True)
+
+subprocess.run([
+    sys.executable,
+    str(spirv_tools_src / 'utils' / 'generate_registry_tables.py'),
+    '--xml=' + str(spirv_headers_inc / 'spirv' / 'spir-v.xml'),
+    '--generator-output=' + str(spirv_tools_cmake_build / 'generators.inc'),
+], check=True)
+
+subprocess.run([
+    sys.executable,
+    str(spirv_tools_src / 'utils' / 'update_build_version.py'),
+    str(spirv_tools_src / 'CHANGES'),
+    str(spirv_tools_cmake_build / 'build-version.inc'),
+], check=True)
+
+for src_name, dst_name in generated_pairs:
+    shutil.copyfile(spirv_tools_cmake_build / src_name, spirv_tools_build / dst_name)
+''',
+  spirv_tools_source_root,
+  spirv_headers_include,
+  spirv_tools_build_root,
+  spirv_tools_cmake_build_root,
+  check : true,
+)
+
 spirv_tools_opts.add_cmake_defines({
   'BUILD_SHARED_LIBS': false,
   'SPIRV_SKIP_TESTS': true,
@@ -323,6 +409,8 @@ if glslang_dep.found()
   deps += glslang_dep
 endif
 
+spirv_headers_inc = include_directories('subprojects/spirv-headers/include')
+
 # -----------------------------------------------------------------------------
 # Final executable
 # -----------------------------------------------------------------------------
@@ -337,6 +425,7 @@ executable(
     '-DSHADER_EXPLORER_INSTALL_LIBDIR="' + get_option('libdir') + '"',
     '-DSHADER_EXPLORER_INSTALL_VULKAN_ICD_DIR="' + join_paths(get_option('datadir'), 'vulkan', 'icd.d') + '"',
   ] + strict_cpp_args,
+  include_directories : spirv_headers_inc,
   dependencies : deps,
   link_with : glslang_link_with,
   link_depends : [mesa_artifacts],

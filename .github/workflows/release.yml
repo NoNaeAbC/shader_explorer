@@ -18,6 +18,9 @@ jobs:
     env:
       LLVM_VERSION: '19'
       LLVM_CONFIG: llvm-config-19
+      BINDGEN_EXTRA_CLANG_ARGS: -std=gnu11
+      CC: gcc-15
+      CXX: g++-15
 
     steps:
       - name: Check out sources
@@ -77,8 +80,9 @@ jobs:
             bison \
             cmake \
             flex \
+            gcc-15 \
             git \
-            glslang-tools \
+            g++-15 \
             clang-${LLVM_VERSION} \
             libclang-${LLVM_VERSION}-dev \
             libclang-cpp${LLVM_VERSION}-dev \
@@ -126,23 +130,32 @@ jobs:
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           meson --version
 
-      - name: Install Rust 1.82
-        uses: dtolnay/rust-toolchain@1.82.0
+      - name: Install Rust 1.90 with rustfmt
+        uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: rustfmt
+
+      - name: Ensure rustfmt is installed on Rust 1.90
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup component add rustfmt --toolchain 1.90.0-x86_64-unknown-linux-gnu
 
       - name: Install bindgen
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v bindgen >/dev/null; then
-            cargo install --locked bindgen-cli --version 0.71.1
+            cargo install --locked bindgen-cli --version 0.72.1
           fi
           if ! command -v cbindgen >/dev/null; then
-            cargo install --locked cbindgen --version 0.28.0
+            cargo install --locked cbindgen --version 0.29.2
           fi
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
 
       - name: Verify Rust binding tools
         run: |
+          rustfmt --version
           bindgen --help >/dev/null
           cbindgen --version
 
@@ -152,13 +165,16 @@ jobs:
           set -euo pipefail
           glslangValidator --version
           "${LLVM_CONFIG}" --version
+          gcc-15 --version
+          g++-15 --version
           clang-${LLVM_VERSION} --version
           rustc --version
           cargo --version
+          rustfmt --version
           bindgen --version
           cbindgen --version
           python3 -c 'import mako'
-          for tool in cmake ninja pkg-config rustc cargo bindgen cbindgen bison flex "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-15 g++-15 "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
