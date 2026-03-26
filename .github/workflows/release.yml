@@ -159,6 +159,36 @@ jobs:
           install -Dm755 "${glslang_build}/StandAlone/glslangValidator" "${HOME}/.local/bin/glslangValidator"
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
+      - name: Build matching SPIRV-LLVM-Translator for Mesa
+        shell: bash
+        run: |
+          set -euo pipefail
+          llvm_version="$("${LLVM_CONFIG}" --version)"
+          translator_tag="v${llvm_version}"
+          translator_root="${RUNNER_TEMP}/spirv-llvm-translator-src"
+          translator_build="${RUNNER_TEMP}/spirv-llvm-translator-build"
+          rm -rf "${translator_root}" "${translator_build}"
+          git -c advice.detachedHead=false clone \
+            --branch "${translator_tag}" \
+            --depth 1 \
+            --recursive \
+            https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git \
+            "${translator_root}"
+          cmake -S "${translator_root}" -B "${translator_build}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
+            -DLLVM_DIR="$("${LLVM_CONFIG}" --cmakedir)" \
+            -DLLVM_SPIRV_INCLUDE_TESTS=OFF
+          cmake --build "${translator_build}" --target LLVMSPIRVLib llvm-spirv
+          sudo cmake --install "${translator_build}"
+          sudo ldconfig
+          pkg-config --modversion LLVMSPIRVLib
+
       - name: Install Rust 1.90 with rustfmt
         uses: dtolnay/rust-toolchain@1.90.0
         with:
@@ -204,6 +234,7 @@ jobs:
           for tool in cmake ninja patchelf pkg-config rustc cargo rustfmt bindgen cbindgen bison flex glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}" "clang++-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
+          pkg-config --modversion LLVMSPIRVLib
           for module in \
             expat \
             libdrm \
