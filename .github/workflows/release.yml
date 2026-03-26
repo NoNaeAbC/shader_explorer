@@ -154,6 +154,44 @@ jobs:
           install -Dm755 "${glslang_build}/StandAlone/glslangValidator" "${HOME}/.local/bin/glslangValidator"
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
+      - name: Build pinned SPIRV-Tools for Mesa
+        shell: bash
+        run: |
+          set -euo pipefail
+          spirv_tools_url="$(sed -n 's/^url = //p' subprojects/spirv-tools.wrap)"
+          spirv_tools_revision="$(sed -n 's/^revision = //p' subprojects/spirv-tools.wrap)"
+          spirv_headers_url="$(sed -n 's/^url = //p' subprojects/spirv-headers.wrap)"
+          spirv_headers_revision="$(sed -n 's/^revision = //p' subprojects/spirv-headers.wrap)"
+          spirv_tools_root="${RUNNER_TEMP}/spirv-tools-src"
+          spirv_headers_root="${RUNNER_TEMP}/spirv-headers-src"
+          spirv_tools_build="${RUNNER_TEMP}/spirv-tools-build"
+          rm -rf "${spirv_tools_root}" "${spirv_headers_root}" "${spirv_tools_build}"
+          git -c advice.detachedHead=false clone \
+            --branch "${spirv_tools_revision}" \
+            --depth 1 \
+            --recursive \
+            "${spirv_tools_url}" \
+            "${spirv_tools_root}"
+          git -c advice.detachedHead=false clone \
+            --branch "${spirv_headers_revision}" \
+            --depth 1 \
+            "${spirv_headers_url}" \
+            "${spirv_headers_root}"
+          cmake -S "${spirv_tools_root}" -B "${spirv_tools_build}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DSPIRV_SKIP_EXECUTABLES=ON \
+            -DSPIRV_SKIP_TESTS=ON \
+            -DSPIRV_WERROR=OFF \
+            -DSPIRV-Headers_SOURCE_DIR="${spirv_headers_root}"
+          cmake --build "${spirv_tools_build}" --target SPIRV-Tools-static SPIRV-Tools-opt spirv-tools-pkg-config
+          sudo cmake --install "${spirv_tools_build}"
+          sudo ldconfig
+          pkg-config --modversion SPIRV-Tools
+
       - name: Build matching SPIRV-LLVM-Translator for Mesa
         shell: bash
         run: |
@@ -226,6 +264,7 @@ jobs:
             command -v "${tool}" >/dev/null
           done
           pkg-config --modversion LLVMSPIRVLib
+          pkg-config --modversion SPIRV-Tools
           for module in \
             expat \
             libdrm \
