@@ -113,7 +113,7 @@ jobs:
           meson setup "${libdrm_build_dir}" "${libdrm_source_dir}" \
             --prefix=/usr/local \
             --buildtype=release \
-            -Dauto-features=disabled \
+            --auto-features=disabled \
             -Damdgpu=enabled \
             -Dcairo-tests=disabled \
             -Dman-pages=disabled \
