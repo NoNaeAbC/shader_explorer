@@ -80,7 +80,6 @@ jobs:
             libelf-dev \
             libexpat1-dev \
             liblmdb-dev \
-            libunwind-dev \
             libzstd-dev \
             lld-${LLVM_VERSION} \
             llvm-${LLVM_VERSION}-dev \
