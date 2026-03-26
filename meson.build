@@ -55,6 +55,8 @@ mesa_sp = subproject('mesa',
     'vulkan-drivers=amd,broadcom,freedreno,intel,intel_hasvk,panfrost,nouveau',
     'tools=drm-shim,intel',
 
+    # Build Mesa as a headless Vulkan-only stack with no X11/Wayland platforms.
+    'platforms=[]',
     'opengl=false',
     'gles1=disabled',
     'gles2=disabled',

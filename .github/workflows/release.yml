@@ -80,24 +80,6 @@ jobs:
             libllvmspirvlib-${LLVM_VERSION}-dev \
             liblmdb-dev \
             libunwind-dev \
-            libwayland-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb1-dev \
-            libxcb-dri3-dev \
-            libxcb-glx0-dev \
-            libxcb-keysyms1-dev \
-            libxcb-present-dev \
-            libxcb-randr0-dev \
-            libxcb-render0-dev \
-            libxcb-shm0-dev \
-            libxcb-sync-dev \
-            libxcb-xfixes0-dev \
-            libxext-dev \
-            libxfixes-dev \
-            libxrandr-dev \
-            libxshmfence-dev \
-            libxxf86vm-dev \
             libzstd-dev \
             lld-${LLVM_VERSION} \
             llvm-${LLVM_VERSION}-dev \
@@ -106,7 +88,6 @@ jobs:
             python3 \
             python3-pip \
             python3-mako \
-            wayland-protocols \
             zlib1g-dev
 
       - name: Install Meson
@@ -166,21 +147,6 @@ jobs:
             libelf \
             libunwind \
             libzstd \
-            wayland-client \
-            wayland-server \
-            x11 \
-            x11-xcb \
-            xcb \
-            xcb-dri3 \
-            xcb-glx \
-            xcb-present \
-            xcb-randr \
-            xcb-shm \
-            xcb-sync \
-            xcb-xfixes \
-            xext \
-            xrandr \
-            xshmfence \
             zlib; do
             pkg-config --exists "${module}"
           done
@@ -249,6 +215,20 @@ jobs:
 
       - name: Validate Nouveau bindgen target before Slang
         run: ninja -C build-debug -v subprojects/mesa/src/nouveau/compiler/nak_bindings.rs
+
+      - name: Build headless Mesa Vulkan driver before Slang
+        run: ninja -C build-debug -v subprojects/mesa/src/intel/vulkan/libvulkan_intel.so
+
+      - name: Validate Mesa Vulkan driver is headless
+        shell: bash
+        run: |
+          set -euo pipefail
+          driver="${PWD}/build-debug/subprojects/mesa/src/intel/vulkan/libvulkan_intel.so"
+          ldd "${driver}" | tee /tmp/libvulkan_intel.ldd
+          if grep -E 'libwayland|libX11|libxcb|libxrandr|libxshmfence' /tmp/libvulkan_intel.ldd; then
+            echo "unexpected window-system dependency found in ${driver}" >&2
+            exit 1
+          fi
 
       - name: Compute Slang cache key
         id: slang-cache-key
