@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       LLVM_VERSION: '20'
+      LIBDRM_VERSION: '2.4.131'
       LLVM_CONFIG: llvm-config-20
       CLANG_PATH: /usr/lib/llvm-20/bin/clang
       CC: clang-20
@@ -96,23 +97,26 @@ jobs:
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           meson --version
 
-      - name: Build pinned libdrm for Mesa on Jammy
+      - name: Build latest libdrm for Mesa on Jammy
         shell: bash
         run: |
           set -euo pipefail
-          libdrm_version=2.4.121
-          libdrm_archive="${RUNNER_TEMP}/libdrm-${libdrm_version}.tar.xz"
-          libdrm_source_dir="${RUNNER_TEMP}/libdrm-${libdrm_version}"
+          libdrm_archive="${RUNNER_TEMP}/libdrm-${LIBDRM_VERSION}.tar.xz"
+          libdrm_source_dir="${RUNNER_TEMP}/libdrm-${LIBDRM_VERSION}"
           libdrm_build_dir="${RUNNER_TEMP}/libdrm-build"
           meson_site_packages="$(python3 -c 'import site; print(site.getusersitepackages())')"
           rm -rf "${libdrm_archive}" "${libdrm_source_dir}" "${libdrm_build_dir}"
-          curl --fail -fsSL "https://dri.freedesktop.org/libdrm/libdrm-${libdrm_version}.tar.xz" -o "${libdrm_archive}"
+          curl --fail -fsSL "https://dri.freedesktop.org/libdrm/libdrm-${LIBDRM_VERSION}.tar.xz" -o "${libdrm_archive}"
           tar -xf "${libdrm_archive}" -C "${RUNNER_TEMP}"
           meson setup "${libdrm_build_dir}" "${libdrm_source_dir}" \
             --prefix=/usr/local \
             --buildtype=release \
             --auto-features=disabled \
             -Damdgpu=enabled \
+            -Dfreedreno=enabled \
+            -Dintel=enabled \
+            -Dnouveau=enabled \
+            -Dvc4=enabled \
             -Dcairo-tests=disabled \
             -Dman-pages=disabled \
             -Dtests=false \
@@ -123,6 +127,9 @@ jobs:
           sudo ldconfig
           pkg-config --modversion libdrm
           pkg-config --modversion libdrm_amdgpu
+          pkg-config --modversion libdrm_freedreno
+          pkg-config --modversion libdrm_intel
+          pkg-config --modversion libdrm_nouveau
 
       - name: Build pinned glslang validator for Mesa
         shell: bash
@@ -268,6 +275,10 @@ jobs:
           for module in \
             expat \
             libdrm \
+            libdrm_amdgpu \
+            libdrm_freedreno \
+            libdrm_intel \
+            libdrm_nouveau \
             libelf \
             libzstd \
             zlib; do
