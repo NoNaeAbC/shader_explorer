@@ -84,6 +84,7 @@ jobs:
             lld-${LLVM_VERSION} \
             llvm-${LLVM_VERSION}-dev \
             ninja-build \
+            patchelf \
             pkg-config \
             python3 \
             python3-pip \
@@ -138,7 +139,8 @@ jobs:
           bindgen --version
           cbindgen --version
           python3 -c 'import mako'
-          for tool in cmake ninja pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          patchelf --version
+          for tool in cmake ninja patchelf pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
@@ -308,9 +310,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x tools/bundle_runtime_deps.py
           chmod +x tools/package_release.sh
           archive="$(./tools/package_release.sh "${{ steps.version.outputs.value }}" linux x86_64 "${PWD}/install" "${PWD}/dist")"
           echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate packaged runtime closure
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage_dir="${PWD}/package-runtime-check"
+          rm -rf "${stage_dir}"
+          mkdir -p "${stage_dir}"
+          tar -xzf "${{ steps.package.outputs.archive }}" -C "${stage_dir}"
+          package_root="$(find "${stage_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          python3 ./tools/bundle_runtime_deps.py --check-only "${package_root}"
 
       - name: Smoke test packaged tree
         if: github.event_name != 'pull_request'

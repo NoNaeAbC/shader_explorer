@@ -7,6 +7,7 @@ TARGET_OS="${2:-linux}"
 TARGET_ARCH="${3:-x86_64}"
 INSTALL_DIR="${4:-${ROOT_DIR}/install}"
 OUT_DIR="${5:-${ROOT_DIR}/dist}"
+BUNDLE_SCRIPT="${ROOT_DIR}/tools/bundle_runtime_deps.py"
 
 if [[ -z "${VERSION}" ]]; then
   echo "usage: $0 <version> [os] [arch] [install-dir] [out-dir]" >&2
@@ -19,6 +20,11 @@ if [[ ! -x "${INSTALL_DIR}/bin/shader_explorer" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${BUNDLE_SCRIPT}" ]]; then
+  echo "missing bundle helper at ${BUNDLE_SCRIPT}" >&2
+  exit 1
+fi
+
 PACKAGE_BASENAME="shader_explorer-${VERSION}-${TARGET_OS}-${TARGET_ARCH}"
 PACKAGE_ROOT="${OUT_DIR}/${PACKAGE_BASENAME}"
 ARCHIVE_PATH="${OUT_DIR}/${PACKAGE_BASENAME}.tar.gz"
@@ -27,6 +33,7 @@ rm -rf "${PACKAGE_ROOT}"
 mkdir -p "${PACKAGE_ROOT}"
 cp -RP "${INSTALL_DIR}/." "${PACKAGE_ROOT}/"
 rm -f "${ARCHIVE_PATH}"
+python3 "${BUNDLE_SCRIPT}" "${PACKAGE_ROOT}"
 
 tar \
   --create \
