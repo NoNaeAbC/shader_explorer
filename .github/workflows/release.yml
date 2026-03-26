@@ -187,7 +187,7 @@ jobs:
             -DSPIRV_SKIP_TESTS=ON \
             -DSPIRV_WERROR=OFF \
             -DSPIRV-Headers_SOURCE_DIR="${spirv_headers_root}"
-          cmake --build "${spirv_tools_build}" --target SPIRV-Tools-static SPIRV-Tools-opt spirv-tools-pkg-config
+          cmake --build "${spirv_tools_build}" -j"$(nproc)"
           sudo cmake --install "${spirv_tools_build}"
           sudo ldconfig
           pkg-config --modversion SPIRV-Tools
