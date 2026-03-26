@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <format>
+#include <fmt/format.h>
 #include <map>
 #include <set>
 #include <sstream>
@@ -301,7 +301,7 @@ namespace {
 		for (uint32_t const cap: caps) {
 			if (!first) { out += ", "; }
 			first = false;
-			out += std::format("{}({})", capability_name(cap), cap);
+			out += fmt::format("{}({})", capability_name(cap), cap);
 		}
 		return out;
 	}
@@ -786,22 +786,22 @@ RuntimeResult run_device_info_dump(const RuntimeConfig &config, std::string &out
 
 	const VkPhysicalDeviceProperties &props = props2.properties;
 
-	out += std::format("device.name={}\n", props.deviceName);
-	out += std::format("device.vendor_id={}\n", props.vendorID);
-	out += std::format("device.device_id={}\n", props.deviceID);
-	out += std::format("device.api_version={}.{}.{}\n", VK_API_VERSION_MAJOR(props.apiVersion),
+	out += fmt::format("device.name={}\n", props.deviceName);
+	out += fmt::format("device.vendor_id={}\n", props.vendorID);
+	out += fmt::format("device.device_id={}\n", props.deviceID);
+	out += fmt::format("device.api_version={}.{}.{}\n", VK_API_VERSION_MAJOR(props.apiVersion),
 					   VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion));
-	out += std::format("limits.max_compute_shared_memory_size={}\n", props.limits.maxComputeSharedMemorySize);
-	out += std::format("limits.max_compute_work_group_invocations={}\n", props.limits.maxComputeWorkGroupInvocations);
-	out += std::format("limits.max_compute_work_group_size={},{},{}\n", props.limits.maxComputeWorkGroupSize[0],
+	out += fmt::format("limits.max_compute_shared_memory_size={}\n", props.limits.maxComputeSharedMemorySize);
+	out += fmt::format("limits.max_compute_work_group_invocations={}\n", props.limits.maxComputeWorkGroupInvocations);
+	out += fmt::format("limits.max_compute_work_group_size={},{},{}\n", props.limits.maxComputeWorkGroupSize[0],
 					   props.limits.maxComputeWorkGroupSize[1], props.limits.maxComputeWorkGroupSize[2]);
-	out += std::format("subgroup.size={}\n", subgroup_props.subgroupSize);
-	out += std::format("subgroup.supported_stages=0x{:x}\n", subgroup_props.supportedStages);
-	out += std::format("subgroup.supported_operations=0x{:x}\n", subgroup_props.supportedOperations);
-	out += std::format("subgroup.supports_arithmetic={}\n",
+	out += fmt::format("subgroup.size={}\n", subgroup_props.subgroupSize);
+	out += fmt::format("subgroup.supported_stages=0x{:x}\n", subgroup_props.supportedStages);
+	out += fmt::format("subgroup.supported_operations=0x{:x}\n", subgroup_props.supportedOperations);
+	out += fmt::format("subgroup.supports_arithmetic={}\n",
 					   ((subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT) != 0U) ? "true"
 																										 : "false");
-	out += std::format("subgroup.quad_operations_in_all_stages={}\n",
+	out += fmt::format("subgroup.quad_operations_in_all_stages={}\n",
 					   subgroup_props.quadOperationsInAllStages == VK_TRUE ? "true" : "false");
 
 	VkPhysicalDeviceRayQueryFeaturesKHR ray_query_features = {
@@ -946,139 +946,139 @@ RuntimeResult run_device_info_dump(const RuntimeConfig &config, std::string &out
 	props_ext2.pNext = &subgroup_size_props;
 	vkGetPhysicalDeviceProperties2(physical_device, &props_ext2);
 
-	out += std::format("feature.shader_int64={}\n", feat2.features.shaderInt64 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_int16={}\n", feat2.features.shaderInt16 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_float64={}\n", feat2.features.shaderFloat64 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.storage_buffer_16bit_access={}\n",
+	out += fmt::format("feature.shader_int64={}\n", feat2.features.shaderInt64 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.shader_int16={}\n", feat2.features.shaderInt16 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.shader_float64={}\n", feat2.features.shaderFloat64 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.storage_buffer_16bit_access={}\n",
 					   vk11.storageBuffer16BitAccess == VK_TRUE ? "true" : "false");
-	out += std::format("feature.uniform_and_storage_buffer_16bit_access={}\n",
+	out += fmt::format("feature.uniform_and_storage_buffer_16bit_access={}\n",
 					   vk11.uniformAndStorageBuffer16BitAccess == VK_TRUE ? "true" : "false");
-	out += std::format("feature.storage_push_constant_16={}\n",
+	out += fmt::format("feature.storage_push_constant_16={}\n",
 					   vk11.storagePushConstant16 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_int8={}\n", vk12.shaderInt8 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_float16={}\n", vk12.shaderFloat16 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_float_controls2={}\n",
+	out += fmt::format("feature.shader_int8={}\n", vk12.shaderInt8 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.shader_float16={}\n", vk12.shaderFloat16 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.shader_float_controls2={}\n",
 					   (has_vulkan_1_4 ? vk14.shaderFloatControls2
 									   : shader_float_controls2_features.shaderFloatControls2) == VK_TRUE
 							   ? "true"
 							   : "false");
-	out += std::format("feature.shader_expect_assume={}\n",
+	out += fmt::format("feature.shader_expect_assume={}\n",
 					   (has_vulkan_1_4 ? vk14.shaderExpectAssume : shader_expect_assume_features.shaderExpectAssume) ==
 									   VK_TRUE
 							   ? "true"
 							   : "false");
-	out += std::format("feature.storage_buffer_8bit_access={}\n",
+	out += fmt::format("feature.storage_buffer_8bit_access={}\n",
 					   vk12.storageBuffer8BitAccess == VK_TRUE ? "true" : "false");
-	out += std::format("feature.uniform_and_storage_buffer_8bit_access={}\n",
+	out += fmt::format("feature.uniform_and_storage_buffer_8bit_access={}\n",
 					   vk12.uniformAndStorageBuffer8BitAccess == VK_TRUE ? "true" : "false");
-	out += std::format("feature.storage_push_constant_8={}\n", vk12.storagePushConstant8 == VK_TRUE ? "true" : "false");
-	out += std::format("feature.runtime_descriptor_array={}\n",
+	out += fmt::format("feature.storage_push_constant_8={}\n", vk12.storagePushConstant8 == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.runtime_descriptor_array={}\n",
 					   vk12.runtimeDescriptorArray == VK_TRUE ? "true" : "false");
-	out += std::format("feature.vulkan_memory_model={}\n", vk12.vulkanMemoryModel == VK_TRUE ? "true" : "false");
-	out += std::format("feature.vulkan_memory_model_device_scope={}\n",
+	out += fmt::format("feature.vulkan_memory_model={}\n", vk12.vulkanMemoryModel == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.vulkan_memory_model_device_scope={}\n",
 					   vk12.vulkanMemoryModelDeviceScope == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_uniform_buffer_array_nonuniform_indexing={}\n",
+	out += fmt::format("feature.shader_uniform_buffer_array_nonuniform_indexing={}\n",
 					   vk12.shaderUniformBufferArrayNonUniformIndexing == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_sampled_image_array_nonuniform_indexing={}\n",
+	out += fmt::format("feature.shader_sampled_image_array_nonuniform_indexing={}\n",
 					   vk12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_storage_buffer_array_nonuniform_indexing={}\n",
+	out += fmt::format("feature.shader_storage_buffer_array_nonuniform_indexing={}\n",
 					   vk12.shaderStorageBufferArrayNonUniformIndexing == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_storage_image_array_nonuniform_indexing={}\n",
+	out += fmt::format("feature.shader_storage_image_array_nonuniform_indexing={}\n",
 					   vk12.shaderStorageImageArrayNonUniformIndexing == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_input_attachment_array_nonuniform_indexing={}\n",
+	out += fmt::format("feature.shader_input_attachment_array_nonuniform_indexing={}\n",
 					   vk12.shaderInputAttachmentArrayNonUniformIndexing == VK_TRUE ? "true" : "false");
-	out += std::format("feature.buffer_device_address={}\n", vk12.bufferDeviceAddress == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_untyped_pointers={}\n",
+	out += fmt::format("feature.buffer_device_address={}\n", vk12.bufferDeviceAddress == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.shader_untyped_pointers={}\n",
 					   untyped_ptr_features.shaderUntypedPointers == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_device_clock={}\n",
+	out += fmt::format("feature.shader_device_clock={}\n",
 					   shader_clock_features.shaderDeviceClock == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_subgroup_clock={}\n",
+	out += fmt::format("feature.shader_subgroup_clock={}\n",
 					   shader_clock_features.shaderSubgroupClock == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_subgroup_rotate={}\n",
+	out += fmt::format("feature.shader_subgroup_rotate={}\n",
 					   (has_vulkan_1_4 ? vk14.shaderSubgroupRotate : subgroup_rotate_features.shaderSubgroupRotate) ==
 									   VK_TRUE
 							   ? "true"
 							   : "false");
-	out += std::format("feature.shader_subgroup_rotate_clustered={}\n",
+	out += fmt::format("feature.shader_subgroup_rotate_clustered={}\n",
 					   (has_vulkan_1_4 ? vk14.shaderSubgroupRotateClustered
 									   : subgroup_rotate_features.shaderSubgroupRotateClustered) == VK_TRUE
 							   ? "true"
 							   : "false");
-	out += std::format("feature.cooperative_matrix={}\n",
+	out += fmt::format("feature.cooperative_matrix={}\n",
 					   cooperative_matrix_features.cooperativeMatrix == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_bfloat16_type={}\n",
+	out += fmt::format("feature.shader_bfloat16_type={}\n",
 					   bfloat16_features.shaderBFloat16Type == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_bfloat16_dot_product={}\n",
+	out += fmt::format("feature.shader_bfloat16_dot_product={}\n",
 					   bfloat16_features.shaderBFloat16DotProduct == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_bfloat16_cooperative_matrix={}\n",
+	out += fmt::format("feature.shader_bfloat16_cooperative_matrix={}\n",
 					   bfloat16_features.shaderBFloat16CooperativeMatrix == VK_TRUE ? "true" : "false");
-	out += std::format("feature.shader_integer_dot_product={}\n",
+	out += fmt::format("feature.shader_integer_dot_product={}\n",
 					   integer_dot_product_features.shaderIntegerDotProduct == VK_TRUE ? "true" : "false");
-	out += std::format("feature.acceleration_structure={}\n",
+	out += fmt::format("feature.acceleration_structure={}\n",
 					   accel_struct_features.accelerationStructure == VK_TRUE ? "true" : "false");
-	out += std::format("feature.ray_query={}\n", ray_query_features.rayQuery == VK_TRUE ? "true" : "false");
-	out += std::format("feature.descriptor_buffer={}\n",
+	out += fmt::format("feature.ray_query={}\n", ray_query_features.rayQuery == VK_TRUE ? "true" : "false");
+	out += fmt::format("feature.descriptor_buffer={}\n",
 					   descriptor_buffer_features.descriptorBuffer == VK_TRUE ? "true" : "false");
-	out += std::format("feature.descriptor_heap={}\n",
+	out += fmt::format("feature.descriptor_heap={}\n",
 					   descriptor_heap_features.descriptorHeap == VK_TRUE ? "true" : "false");
 	bool const push_descriptor_supported =
 			has_vulkan_1_4 || device_supports_extension(physical_device, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-	out += std::format("feature.push_descriptor={}\n", push_descriptor_supported ? "true" : "false");
-	out += std::format("feature.shader_subgroup_extended_types={}\n",
+	out += fmt::format("feature.push_descriptor={}\n", push_descriptor_supported ? "true" : "false");
+	out += fmt::format("feature.shader_subgroup_extended_types={}\n",
 					   vk12.shaderSubgroupExtendedTypes == VK_TRUE ? "true" : "false");
-	out += std::format("feature.subgroup_size_control={}\n",
+	out += fmt::format("feature.subgroup_size_control={}\n",
 					   subgroup_size_control.subgroupSizeControl == VK_TRUE ? "true" : "false");
-	out += std::format("feature.compute_full_subgroups={}\n",
+	out += fmt::format("feature.compute_full_subgroups={}\n",
 					   subgroup_size_control.computeFullSubgroups == VK_TRUE ? "true" : "false");
-	out += std::format("subgroup_size_control.min={}\n", subgroup_size_props.minSubgroupSize);
-	out += std::format("subgroup_size_control.max={}\n", subgroup_size_props.maxSubgroupSize);
-	out += std::format("subgroup_size_control.required_stages=0x{:x}\n",
+	out += fmt::format("subgroup_size_control.min={}\n", subgroup_size_props.minSubgroupSize);
+	out += fmt::format("subgroup_size_control.max={}\n", subgroup_size_props.maxSubgroupSize);
+	out += fmt::format("subgroup_size_control.required_stages=0x{:x}\n",
 					   subgroup_size_props.requiredSubgroupSizeStages);
 
-	out += std::format("extension.VK_KHR_push_descriptor={}\n",
+	out += fmt::format("extension.VK_KHR_push_descriptor={}\n",
 					   device_supports_extension(physical_device, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME) ? "true"
 																										 : "false");
-	out += std::format("extension.VK_EXT_descriptor_buffer={}\n",
+	out += fmt::format("extension.VK_EXT_descriptor_buffer={}\n",
 					   device_supports_extension(physical_device, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) ? "true"
 																										   : "false");
-	out += std::format("extension.VK_EXT_descriptor_heap={}\n",
+	out += fmt::format("extension.VK_EXT_descriptor_heap={}\n",
 					   device_supports_extension(physical_device, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME) ? "true"
 																										 : "false");
-	out += std::format("extension.VK_KHR_maintenance5={}\n",
+	out += fmt::format("extension.VK_KHR_maintenance5={}\n",
 					   device_supports_extension(physical_device, VK_KHR_MAINTENANCE_5_EXTENSION_NAME) ? "true"
 																									   : "false");
-	out += std::format("extension.VK_KHR_shader_untyped_pointers={}\n",
+	out += fmt::format("extension.VK_KHR_shader_untyped_pointers={}\n",
 					   device_supports_extension(physical_device, VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME)
 							   ? "true"
 							   : "false");
-	out += std::format("extension.VK_KHR_shader_bfloat16={}\n",
+	out += fmt::format("extension.VK_KHR_shader_bfloat16={}\n",
 					   device_supports_extension(physical_device, VK_KHR_SHADER_BFLOAT16_EXTENSION_NAME) ? "true"
 																										 : "false");
-	out += std::format("extension.VK_KHR_shader_integer_dot_product={}\n",
+	out += fmt::format("extension.VK_KHR_shader_integer_dot_product={}\n",
 					   device_supports_extension(physical_device, VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME)
 							   ? "true"
 							   : "false");
-	out += std::format("extension.VK_KHR_ray_query={}\n",
+	out += fmt::format("extension.VK_KHR_ray_query={}\n",
 					   device_supports_extension(physical_device, VK_KHR_RAY_QUERY_EXTENSION_NAME) ? "true" : "false");
-	out += std::format("extension.VK_KHR_acceleration_structure={}\n",
+	out += fmt::format("extension.VK_KHR_acceleration_structure={}\n",
 					   device_supports_extension(physical_device, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
 							   ? "true"
 							   : "false");
-	out += std::format("extension.VK_KHR_deferred_host_operations={}\n",
+	out += fmt::format("extension.VK_KHR_deferred_host_operations={}\n",
 					   device_supports_extension(physical_device, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)
 							   ? "true"
 							   : "false");
-	out += std::format(
+	out += fmt::format(
 			"extension.VK_KHR_buffer_device_address={}\n",
 			device_supports_extension(physical_device, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME) ? "true" : "false");
-	out += std::format("extension.VK_KHR_shader_clock={}\n",
+	out += fmt::format("extension.VK_KHR_shader_clock={}\n",
 					   device_supports_extension(physical_device, VK_KHR_SHADER_CLOCK_EXTENSION_NAME) ? "true"
 																									  : "false");
-	out += std::format(
+	out += fmt::format(
 			"extension.VK_EXT_subgroup_size_control={}\n",
 			device_supports_extension(physical_device, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) ? "true" : "false");
 	bool const has_khr_coop = device_supports_extension(physical_device, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
-	out += std::format("extension.VK_KHR_cooperative_matrix={}\n", has_khr_coop ? "true" : "false");
+	out += fmt::format("extension.VK_KHR_cooperative_matrix={}\n", has_khr_coop ? "true" : "false");
 	if (has_khr_coop) {
 		auto get_coop_props = reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR>(
 				vkGetInstanceProcAddr(scope.instance, "vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR"));
@@ -1092,7 +1092,7 @@ RuntimeResult run_device_info_dump(const RuntimeConfig &config, std::string &out
 					p.pNext = nullptr;
 				}
 				if (get_coop_props(physical_device, &coop_count, coop_props.data()) == VK_SUCCESS) {
-					out += std::format("coop_matrix.property_count={}\n", coop_count);
+					out += fmt::format("coop_matrix.property_count={}\n", coop_count);
 					for (uint32_t i = 0; i < coop_count; ++i) {
 						const auto &p = coop_props[i];
 
@@ -1124,7 +1124,7 @@ RuntimeResult run_device_info_dump(const RuntimeConfig &config, std::string &out
 							}
 						};
 
-						out += std::format(R"(
+						out += fmt::format(R"(
   {{
     .m_size                  = {},
     .n_size                  = {},
@@ -1749,7 +1749,7 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 
 	if ((subgroup_props.supportedOperations & req.required_subgroup_ops) != req.required_subgroup_ops) {
 		uint32_t const	  missing = req.required_subgroup_ops & ~subgroup_props.supportedOperations;
-		std::string const detail  = std::format("required=0x{:x}, supported=0x{:x}, missing=0x{:x}",
+		std::string const detail  = fmt::format("required=0x{:x}, supported=0x{:x}, missing=0x{:x}",
 												req.required_subgroup_ops, subgroup_props.supportedOperations, missing);
 		vkDestroyInstance(instance, nullptr);
 		return runtime_fail(RuntimeFailure::MissingFeatureSubgroupOpsMask, detail);
@@ -2200,7 +2200,7 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 			vkDestroyInstance(instance, nullptr);
 			return runtime_fail(
 					RuntimeFailure::VkCreatePipelineLayoutFailed,
-					std::format("vkCreatePipelineLayout failed (maxPushConstantsSize={})", push_constant_size));
+					fmt::format("vkCreatePipelineLayout failed (maxPushConstantsSize={})", push_constant_size));
 		}
 	}
 
@@ -2366,7 +2366,8 @@ RuntimeResult run_pipeline_dump(const std::vector<uint32_t> &spirv, const Runtim
 
 
 	for (uint32_t repr_index = 0; repr_index < repr_count; ++repr_index) {
-		if (std::ranges::contains(names_references, representations[repr_index].name)) {
+		if (std::find(names_references.begin(), names_references.end(), representations[repr_index].name) !=
+			names_references.end()) {
 			if (!text_reprs[repr_index].has_value()) { continue; }
 			out_text = *text_reprs[repr_index];
 			goto done;

@@ -10,10 +10,10 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <filesystem>
+#include <fmt/format.h>
 #include <fstream>
 #include <map>
 #include <optional>
-#include <print>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -40,6 +40,23 @@
 
 namespace fs = std::filesystem;
 namespace {
+
+	template <typename... Args>
+	void print(fmt::format_string<Args...> format, Args &&...args) {
+		fmt::print(format, std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void println(fmt::format_string<Args...> format, Args &&...args) {
+		fmt::print(format, std::forward<Args>(args)...);
+		fmt::print("\n");
+	}
+
+	template <typename... Args>
+	void println(std::FILE *stream, fmt::format_string<Args...> format, Args &&...args) {
+		fmt::print(stream, format, std::forward<Args>(args)...);
+		fmt::print(stream, "\n");
+	}
 
 	struct device_config {
 		std::string						   key;
@@ -341,21 +358,21 @@ namespace {
 
 	bool write_text_output(std::string_view output_path, const std::string &text) {
 		if (output_path.empty() || output_path == "-") {
-			std::print("{}", text);
-			if (!text.empty() && text.back() != '\n') { std::println(""); }
+			print("{}", text);
+			if (!text.empty() && text.back() != '\n') { println(""); }
 			return true;
 		}
 
 		fs::path const path(output_path);
 		std::ofstream  out(path, std::ios::binary);
 		if (!out) {
-			std::println(stderr, "failed to open output file: {}", path.string());
+			println(stderr, "failed to open output file: {}", path.string());
 			return false;
 		}
 		out << text;
 		if (!text.empty() && text.back() != '\n') { out << "\n"; }
 		if (!out) {
-			std::println(stderr, "failed to write output file: {}", path.string());
+			println(stderr, "failed to write output file: {}", path.string());
 			return false;
 		}
 		return true;
@@ -771,7 +788,7 @@ namespace {
 
 	bool write_icd_files_for_drivers(const std::vector<fs::path> &icd_paths, const std::string &gpu_key) {
 		if (icd_paths.empty()) {
-			std::println(stderr, "no Vulkan ICD drivers provided for gpu preset '{}'", gpu_key);
+			println(stderr, "no Vulkan ICD drivers provided for gpu preset '{}'", gpu_key);
 			return false;
 		}
 
@@ -779,7 +796,7 @@ namespace {
 
 		for (const fs::path &icd_path: icd_paths) {
 			if (!fs::exists(icd_path)) {
-				std::println(stderr, "missing Mesa ICD JSON: {}", icd_path.string());
+				println(stderr, "missing Mesa ICD JSON: {}", icd_path.string());
 				return false;
 			}
 			if (!vk_driver_files.empty()) { vk_driver_files += ":"; }
@@ -794,7 +811,7 @@ namespace {
 	bool configure_gpu_environment(const device_config &config, bool load_shim_now) {
 		std::string reason;
 		if (!mesa_artifacts_ready(config, reason)) {
-			std::println(stderr, "Mesa artifacts not ready for gpu preset '{}': {}", config.key, reason);
+			println(stderr, "Mesa artifacts not ready for gpu preset '{}': {}", config.key, reason);
 			return false;
 		}
 
@@ -811,8 +828,8 @@ namespace {
 			void const	  *shim_handle = dlopen(shim_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
 			if (shim_handle == nullptr) {
 				const char *const dl_error = dlerror();
-				std::println(stderr, "failed to load DRM shim via dlopen: {}\ndlerror: {}", shim_path.string(),
-							 (dl_error != nullptr) ? dl_error : "unknown");
+				println(stderr, "failed to load DRM shim via dlopen: {}\ndlerror: {}", shim_path.string(),
+						(dl_error != nullptr) ? dl_error : "unknown");
 				return false;
 			}
 		}
@@ -825,7 +842,7 @@ namespace {
 		const char	*text = static_cast<const char *>(blob->getBufferPointer());
 		size_t const size = blob->getBufferSize();
 		if ((text == nullptr) || size == 0) { return false; }
-		std::println(stderr, "{}:\n{}", label, std::string(text, size));
+		println(stderr, "{}:\n{}", label, std::string(text, size));
 		return true;
 	}
 
@@ -908,7 +925,7 @@ namespace {
 	bool compile_slang(const fs::path &shader_path, SpirvTargetVersion spirv_target, std::vector<uint32_t> &out_spirv) {
 		Slang::ComPtr<slang::IGlobalSession> global_session;
 		if (SLANG_FAILED(slang_createGlobalSession(SLANG_API_VERSION, global_session.writeRef()))) {
-			std::println(stderr, "failed to create Slang global session");
+			println(stderr, "failed to create Slang global session");
 			return false;
 		}
 
@@ -919,8 +936,8 @@ namespace {
 				.forceGLSLScalarBufferLayout = false,
 		};
 		if (target_desc.profile == SLANG_PROFILE_UNKNOWN) {
-			std::println(stderr, "slang profile not available for SPIR-V target {}",
-						 spirv_target_to_string(spirv_target));
+			println(stderr, "slang profile not available for SPIR-V target {}",
+					spirv_target_to_string(spirv_target));
 			return false;
 		}
 
@@ -932,8 +949,8 @@ namespace {
 			shader_dir_abs = fs::current_path(ec);
 		}
 		if (ec || shader_dir_abs.empty()) {
-			std::println(stderr, "failed to resolve shader directory for Slang search path: {}",
-						 shader_dir_path.string());
+			println(stderr, "failed to resolve shader directory for Slang search path: {}",
+					shader_dir_path.string());
 			return false;
 		}
 		std::string const				  shader_dir = shader_dir_abs.string();
@@ -948,13 +965,13 @@ namespace {
 
 		Slang::ComPtr<slang::ISession> session;
 		if (SLANG_FAILED(global_session->createSession(session_desc, session.writeRef()))) {
-			std::println(stderr, "failed to create Slang session");
+			println(stderr, "failed to create Slang session");
 			return false;
 		}
 
 		std::string const source_text = read_text_file(shader_path);
 		if (source_text.empty()) {
-			std::println(stderr, "failed to read shader source: {}", shader_path.string());
+			println(stderr, "failed to read shader source: {}", shader_path.string());
 			return false;
 		}
 
@@ -965,7 +982,7 @@ namespace {
 																	 source_text.c_str(), diagnostics.writeRef());
 		if (module == nullptr) { maybe_print_slang_blob("slang diagnostics", diagnostics.get()); }
 		if (module == nullptr) {
-			std::println(stderr, "failed to load Slang module from source");
+			println(stderr, "failed to load Slang module from source");
 			return false;
 		}
 
@@ -978,7 +995,7 @@ namespace {
 			maybe_print_slang_blob("slang entry-point diagnostics", entry_diag.get());
 		}
 		if (SLANG_FAILED(entry_result) || (entry_point == nullptr)) {
-			std::println(stderr, "failed to resolve compute entry point `main`");
+			println(stderr, "failed to resolve compute entry point `main`");
 			return false;
 		}
 
@@ -991,7 +1008,7 @@ namespace {
 			maybe_print_slang_blob("slang composite diagnostics", composite_diag.get());
 		}
 		if (SLANG_FAILED(composite_result) || (composite == nullptr)) {
-			std::println(stderr, "failed to create Slang composite component");
+			println(stderr, "failed to create Slang composite component");
 			return false;
 		}
 
@@ -1000,7 +1017,7 @@ namespace {
 		SlangResult const link_result = composite->link(linked_program.writeRef(), link_diag.writeRef());
 		if (SLANG_FAILED(link_result)) { maybe_print_slang_blob("slang link diagnostics", link_diag.get()); }
 		if (SLANG_FAILED(link_result) || (linked_program == nullptr)) {
-			std::println(stderr, "failed to link Slang program");
+			println(stderr, "failed to link Slang program");
 			return false;
 		}
 
@@ -1010,13 +1027,13 @@ namespace {
 				linked_program->getEntryPointCode(0, 0, spirv_blob.writeRef(), code_diag.writeRef());
 		if (SLANG_FAILED(code_result)) { maybe_print_slang_blob("slang codegen diagnostics", code_diag.get()); }
 		if (SLANG_FAILED(code_result) || (spirv_blob == nullptr)) {
-			std::println(stderr, "failed to generate SPIR-V via Slang API");
+			println(stderr, "failed to generate SPIR-V via Slang API");
 			return false;
 		}
 
 		size_t const size = spirv_blob->getBufferSize();
 		if (size == 0 || (size % sizeof(uint32_t)) != 0) {
-			std::println(stderr, "invalid SPIR-V blob returned by Slang");
+			println(stderr, "invalid SPIR-V blob returned by Slang");
 			return false;
 		}
 
@@ -1040,13 +1057,13 @@ namespace {
 	bool compile_glsl_compute(const fs::path &shader_path, SpirvTargetVersion spirv_target,
 							  std::vector<uint32_t> &out_spirv) {
 		if (!ensure_glslang_process_initialized()) {
-			std::println(stderr, "failed to initialize in-process glslang compiler");
+			println(stderr, "failed to initialize in-process glslang compiler");
 			return false;
 		}
 
 		std::string const source_text = read_text_file(shader_path);
 		if (source_text.empty()) {
-			std::println(stderr, "failed to read GLSL source: {}", shader_path.string());
+			println(stderr, "failed to read GLSL source: {}", shader_path.string());
 			return false;
 		}
 
@@ -1066,35 +1083,35 @@ namespace {
 
 		const TBuiltInResource *resources = GetDefaultResources();
 		if (resources == nullptr) {
-			std::println(stderr, "failed to get glslang resource limits");
+			println(stderr, "failed to get glslang resource limits");
 			return false;
 		}
 		DirStackFileIncluder includer;
 		fs::path const		 shader_dir = shader_path.has_parent_path() ? shader_path.parent_path() : fs::path(".");
 		includer.pushExternalLocalDirectory(shader_dir.string());
 		if (!shader.parse(resources, 450, false, messages, includer)) {
-			std::println(stderr, "glslang parse failed for {}", shader_path.string());
+			println(stderr, "glslang parse failed for {}", shader_path.string());
 			const char *info_log = shader.getInfoLog();
-			if ((info_log != nullptr) && (info_log[0] != 0)) { std::println(stderr, "{}", info_log); }
+			if ((info_log != nullptr) && (info_log[0] != 0)) { println(stderr, "{}", info_log); }
 			const char *debug_log = shader.getInfoDebugLog();
-			if ((debug_log != nullptr) && (debug_log[0] != 0)) { std::println(stderr, "{}", debug_log); }
+			if ((debug_log != nullptr) && (debug_log[0] != 0)) { println(stderr, "{}", debug_log); }
 			return false;
 		}
 
 		glslang::TProgram program;
 		program.addShader(&shader);
 		if (!program.link(messages)) {
-			std::println(stderr, "glslang link failed for {}", shader_path.string());
+			println(stderr, "glslang link failed for {}", shader_path.string());
 			const char *info_log = program.getInfoLog();
-			if ((info_log != nullptr) && (info_log[0] != 0)) { std::println(stderr, "{}", info_log); }
+			if ((info_log != nullptr) && (info_log[0] != 0)) { println(stderr, "{}", info_log); }
 			const char *debug_log = program.getInfoDebugLog();
-			if ((debug_log != nullptr) && (debug_log[0] != 0)) { std::println(stderr, "{}", debug_log); }
+			if ((debug_log != nullptr) && (debug_log[0] != 0)) { println(stderr, "{}", debug_log); }
 			return false;
 		}
 
 		glslang::TIntermediate const *intermediate = program.getIntermediate(EShLangCompute);
 		if (intermediate == nullptr) {
-			std::println(stderr, "glslang produced no compute intermediate for {}", shader_path.string());
+			println(stderr, "glslang produced no compute intermediate for {}", shader_path.string());
 			return false;
 		}
 
@@ -1103,7 +1120,7 @@ namespace {
 		};
 		glslang::GlslangToSpv(*intermediate, out_spirv, &options);
 		if (out_spirv.empty()) {
-			std::println(stderr, "glslang produced empty SPIR-V for {}", shader_path.string());
+			println(stderr, "glslang produced empty SPIR-V for {}", shader_path.string());
 			return false;
 		}
 
@@ -1117,18 +1134,18 @@ namespace {
 		optimizer.SetMessageConsumer(
 				[](spv_message_level_t level, const char *, const spv_position_t &pos, const char *message) {
 					if (level <= SPV_MSG_WARNING) {
-						std::println(stderr, "spirv-opt: line {}: {}", pos.line, (message != nullptr) ? message : "");
+						println(stderr, "spirv-opt: line {}: {}", pos.line, (message != nullptr) ? message : "");
 					}
 				});
 		optimizer.RegisterPerformancePasses();
 
 		std::vector<uint32_t> out;
 		if (!optimizer.Run(input_spirv.data(), input_spirv.size(), &out)) {
-			std::println(stderr, "in-process spirv-opt failed");
+			println(stderr, "in-process spirv-opt failed");
 			return false;
 		}
 		if (out.empty()) {
-			std::println(stderr, "in-process spirv-opt produced empty output");
+			println(stderr, "in-process spirv-opt produced empty output");
 			return false;
 		}
 		optimized_spirv = std::move(out);
@@ -1140,22 +1157,22 @@ namespace {
 		tools.SetMessageConsumer(
 				[](spv_message_level_t level, const char *, const spv_position_t &pos, const char *message) {
 					if (level <= SPV_MSG_WARNING) {
-						std::println(stderr, "spirv-dis: line {}: {}", pos.line, (message != nullptr) ? message : "");
+						println(stderr, "spirv-dis: line {}: {}", pos.line, (message != nullptr) ? message : "");
 					}
 				});
 
 		uint32_t options = SPV_BINARY_TO_TEXT_OPTION_INDENT | SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
 						   SPV_BINARY_TO_TEXT_OPTION_COMMENT;
 		if (use_color) { options |= SPV_BINARY_TO_TEXT_OPTION_COLOR; }
-		if (!tools.Disassemble(spirv, &disassembly, options)) {
-			std::println(stderr, "in-process spirv-dis failed");
+			if (!tools.Disassemble(spirv, &disassembly, options)) {
+				println(stderr, "in-process spirv-dis failed");
 			return false;
 		}
 		return true;
 	}
 
 	void print_usage(const std::map<std::string, device_config> &catalog) {
-		std::println(stderr,
+		println(stderr,
 					 "usage: shader_explorer [--version] [--gpu <key>] [--lang <auto|slang|glsl>] [--target "
 					 "<info|spirv|final_nir|asm>] "
 					 "[--binding-model <classic|push_descriptor|descriptor_buffer>] "
@@ -1180,12 +1197,12 @@ namespace {
 					 "  --output <path>  output destination: - (stdout) or file path (default: -)\n"
 					 "\n"
 					 "available GPUs:");
-		for (const auto &[key, cfg]: catalog) { std::println(stderr, "  {} - {}", key, cfg.description); }
+		for (const auto &[key, cfg]: catalog) { println(stderr, "  {} - {}", key, cfg.description); }
 	}
 
 	void print_runtime_failure_with_detail(RuntimeFailure failure, std::string_view detail) {
-		std::println(stderr, "runtime failure: {}", runtime_failure_message(failure));
-		if (!detail.empty()) { std::println(stderr, "detail: {}", detail); }
+		println(stderr, "runtime failure: {}", runtime_failure_message(failure));
+		if (!detail.empty()) { println(stderr, "detail: {}", detail); }
 	}
 
 	int report_runtime_result_failure(const RuntimeResult &result) {
@@ -1204,11 +1221,11 @@ namespace {
 		}
 		if (child.internal_failure != InternalFailure::None) {
 			std::string detail_suffix;
-			if (!child.detail.empty()) { detail_suffix = std::format(" ({})", child.detail); }
+			if (!child.detail.empty()) { detail_suffix = fmt::format(" ({})", child.detail); }
 			std::string errno_suffix;
-			if (child.sys_errno != 0) { errno_suffix = std::format(" errno={}", child.sys_errno); }
-			std::println(stderr, "internal child failure while {}: {}{}{}", context,
-						 internal_failure_message(child.internal_failure), detail_suffix, errno_suffix);
+			if (child.sys_errno != 0) { errno_suffix = fmt::format(" errno={}", child.sys_errno); }
+			println(stderr, "internal child failure while {}: {}{}{}", context,
+					internal_failure_message(child.internal_failure), detail_suffix, errno_suffix);
 			return 1;
 		}
 		if (child.runtime_failure != RuntimeFailure::None) {
@@ -1227,12 +1244,12 @@ namespace {
 				return 0;
 			}
 			if (arg == "--version") {
-				std::println("{}", SHADER_EXPLORER_VERSION);
+				println("{}", SHADER_EXPLORER_VERSION);
 				return 0;
 			}
 			if (arg == "--internal-mode") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--internal-mode requires a value");
+					println(stderr, "--internal-mode requires a value");
 					return 1;
 				}
 				std::string_view const mode = argv[++i];
@@ -1243,7 +1260,7 @@ namespace {
 				} else if (mode == "spirv-max") {
 					options.internal_mode = InternalMode::SpirvMax;
 				} else {
-					std::println(stderr, "invalid --internal-mode value: {}", mode);
+					println(stderr, "invalid --internal-mode value: {}", mode);
 					return 1;
 				}
 				continue;
@@ -1254,7 +1271,7 @@ namespace {
 			}
 			if (arg == "--internal-spirv-fd") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--internal-spirv-fd requires a value");
+					println(stderr, "--internal-spirv-fd requires a value");
 					return 1;
 				}
 				options.internal_spirv_fd = std::atoi(argv[++i]);
@@ -1262,11 +1279,11 @@ namespace {
 			}
 			if (arg == "--internal-spirv-bytes") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--internal-spirv-bytes requires a value");
+					println(stderr, "--internal-spirv-bytes requires a value");
 					return 1;
 				}
 				if (!parse_size_arg(argv[++i], options.internal_spirv_bytes)) {
-					std::println(stderr, "invalid --internal-spirv-bytes value");
+					println(stderr, "invalid --internal-spirv-bytes value");
 					return 1;
 				}
 				continue;
@@ -1281,7 +1298,7 @@ namespace {
 				continue;
 			}
 			if (arg == "--setup-mesa" || arg == "--auto-build-mesa") {
-				std::println(stderr,
+				println(stderr,
 							 "{} is no longer supported in the runtime binary.\n"
 							 "Use Meson configuration/build to provide Mesa artifacts.",
 							 arg);
@@ -1289,7 +1306,7 @@ namespace {
 			}
 			if (arg == "--gpu") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--gpu requires a value");
+					println(stderr, "--gpu requires a value");
 					return 1;
 				}
 				options.gpu_key = argv[++i];
@@ -1297,22 +1314,22 @@ namespace {
 			}
 			if (arg == "--target") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--target requires a value");
+					println(stderr, "--target requires a value");
 					return 1;
 				}
 				if (!parse_output_target(argv[++i], options.output_target)) {
-					std::println(stderr, "invalid --target value, expected one of: info, spirv, final_nir, asm");
+					println(stderr, "invalid --target value, expected one of: info, spirv, final_nir, asm");
 					return 1;
 				}
 				continue;
 			}
 			if (arg == "--binding-model") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--binding-model requires a value");
+					println(stderr, "--binding-model requires a value");
 					return 1;
 				}
 				if (!parse_binding_model_arg(argv[++i], options.binding_model)) {
-					std::println(stderr,
+					println(stderr,
 								 "invalid --binding-model value, expected one of: classic, push_descriptor, "
 								 "descriptor_buffer");
 					return 1;
@@ -1321,11 +1338,11 @@ namespace {
 			}
 			if (arg == "--spirv-target") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--spirv-target requires a value");
+					println(stderr, "--spirv-target requires a value");
 					return 1;
 				}
 				if (!parse_spirv_target_arg(argv[++i], options.spirv_target_mode, options.requested_spirv_target)) {
-					std::println(stderr,
+					println(stderr,
 								 "invalid --spirv-target value, expected one of: max, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, "
 								 "1.6");
 					return 1;
@@ -1334,12 +1351,12 @@ namespace {
 			}
 			if (arg == "--subgroup-size") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--subgroup-size requires a value");
+					println(stderr, "--subgroup-size requires a value");
 					return 1;
 				}
 				if (!parse_size_arg(argv[++i], options.requested_subgroup_size) ||
 					options.requested_subgroup_size == 0) {
-					std::println(stderr, "invalid --subgroup-size value, expected a positive integer");
+					println(stderr, "invalid --subgroup-size value, expected a positive integer");
 					return 1;
 				}
 				continue;
@@ -1354,18 +1371,18 @@ namespace {
 			}
 			if (arg == "--lang") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--lang requires a value");
+					println(stderr, "--lang requires a value");
 					return 1;
 				}
 				if (!parse_source_language(argv[++i], options.source_lang)) {
-					std::println(stderr, "invalid --lang value, expected one of: auto, slang, glsl");
+					println(stderr, "invalid --lang value, expected one of: auto, slang, glsl");
 					return 1;
 				}
 				continue;
 			}
 			if (arg == "--output") {
 				if (i + 1 >= argc) {
-					std::println(stderr, "--output requires a value");
+					println(stderr, "--output requires a value");
 					return 1;
 				}
 				options.output_path = argv[++i];
@@ -1375,7 +1392,7 @@ namespace {
 				options.shader_path = fs::path(arg);
 				continue;
 			}
-			std::println(stderr, "unexpected extra argument: {}", arg);
+			println(stderr, "unexpected extra argument: {}", arg);
 			print_usage(catalog);
 			return 1;
 		}
@@ -1534,7 +1551,7 @@ namespace {
 			ChildResponse const child = run_internal_child_with_shim(argv0, shim_path, child_args);
 			if (report_child_failure("querying max SPIR-V target", child) != 0) { return false; }
 			if (!parse_spirv_version_text(child.output, out_version)) {
-				std::println(stderr, "internal child returned invalid max SPIR-V version payload: '{}'", child.output);
+				println(stderr, "internal child returned invalid max SPIR-V version payload: '{}'", child.output);
 				return false;
 			}
 			return true;
@@ -1552,7 +1569,7 @@ namespace {
 			return true;
 		}
 		if (static_cast<int>(options.requested_spirv_target) > static_cast<int>(max_supported)) {
-			std::println(stderr,
+			println(stderr,
 						 "requested SPIR-V target {} is not supported by the selected driver; maximum supported is {}",
 						 spirv_target_to_string(options.requested_spirv_target), spirv_target_to_string(max_supported));
 			return false;
@@ -1576,7 +1593,7 @@ namespace {
 		if (extension == ".glsl" || extension == ".comp") {
 			return compile_glsl_compute(*options.shader_path, active_spirv_target, out_spirv);
 		}
-		std::println(stderr,
+		println(stderr,
 					 "unsupported shader file extension: {}\n"
 					 "supported in auto mode: .slang, .glsl, .comp\n"
 					 "or pass --lang slang|glsl to force parser selection",
@@ -1589,7 +1606,7 @@ namespace {
 		if (!active_config.shim_file.empty() && !options.internal_shim_ready) {
 			SpirvSharedMemory spirv_mem;
 			if (!create_spirv_shared_memory(spirv, spirv_mem)) {
-				std::println(stderr, "failed to prepare shared-memory SPIR-V payload for child runtime");
+				println(stderr, "failed to prepare shared-memory SPIR-V payload for child runtime");
 				return 1;
 			}
 
@@ -1637,7 +1654,7 @@ int main(int argc, char **argv) {
 			return *parse_exit;
 		}
 		if (default_mesa_libdir().empty() || default_vulkan_icd_dir().empty()) {
-			std::println(stderr, "failed to resolve installed Mesa runtime directories");
+			println(stderr, "failed to resolve installed Mesa runtime directories");
 			return 1;
 		}
 		if (std::optional<int> internal_exit = maybe_handle_internal_mode(options); internal_exit.has_value()) {
@@ -1648,11 +1665,11 @@ int main(int argc, char **argv) {
 			print_usage(catalog);
 			return 0;
 		}
-		if (options.gpu_key.empty()) { std::println(stderr, "No GPU selected."); }
+		if (options.gpu_key.empty()) { println(stderr, "No GPU selected."); }
 
 		auto config_it = catalog.find(options.gpu_key);
 		if (config_it == catalog.end()) {
-			std::println(stderr, "unknown gpu key: {}", options.gpu_key);
+			println(stderr, "unknown gpu key: {}", options.gpu_key);
 			print_usage(catalog);
 			return 1;
 		}
@@ -1675,7 +1692,7 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 		if (!fs::exists(*options.shader_path)) {
-			std::println(stderr, "shader file not found: {}", options.shader_path->string());
+			println(stderr, "shader file not found: {}", options.shader_path->string());
 			return 1;
 		}
 
@@ -1692,11 +1709,11 @@ int main(int argc, char **argv) {
 		}
 
 		return handle_pipeline_target(options, active_config, argv[0], spirv_optimized);
-	} catch (const std::format_error &e) {
-		std::println(stderr, "format error: {}", e.what());
+	} catch (const fmt::format_error &e) {
+		println(stderr, "format error: {}", e.what());
 		return 2;
 	} catch (...) {
-		std::println(stderr, "unexpected fatal error");
+		println(stderr, "unexpected fatal error");
 		return 1;
 	}
 }

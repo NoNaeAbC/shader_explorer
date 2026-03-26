@@ -21,8 +21,6 @@ jobs:
       CLANG_PATH: /usr/lib/llvm-20/bin/clang
       CC: clang-20
       CXX: clang++-20
-      CXXFLAGS: -stdlib=libc++
-      LDFLAGS: -stdlib=libc++
       PKG_CONFIG_PATH: /usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig
 
     steps:
@@ -71,13 +69,12 @@ jobs:
             flex \
             git \
             clang-${LLVM_VERSION} \
-            libc++-${LLVM_VERSION}-dev \
-            libc++abi-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev \
             libclang-cpp${LLVM_VERSION}-dev \
             libclc-${LLVM_VERSION}-dev \
             libelf-dev \
             libexpat1-dev \
+            libfmt-dev \
             liblmdb-dev \
             libpciaccess-dev \
             libzstd-dev \
@@ -146,8 +143,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
             -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
             -DBUILD_SHARED_LIBS=OFF \
             -DGLSLANG_TESTS=OFF \
             -DGLSLANG_ENABLE_INSTALL=OFF \
@@ -179,9 +174,6 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=/usr/local \
             -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
             -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
-            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
             -DLLVM_DIR="$("${LLVM_CONFIG}" --cmakedir)" \
             -DLLVM_SPIRV_INCLUDE_TESTS=OFF
           cmake --build "${translator_build}" --target LLVMSPIRVLib llvm-spirv
@@ -229,8 +221,7 @@ jobs:
           cbindgen --version
           python3 -c 'import mako'
           patchelf --version
-          printf '#include <print>\nint main() { std::println("{}" , 1); }\n' | \
-            clang++-${LLVM_VERSION} -std=c++23 -stdlib=libc++ -x c++ - -fsyntax-only
+          pkg-config --modversion fmt
           for tool in cmake ninja patchelf pkg-config rustc cargo rustfmt bindgen cbindgen bison flex glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}" "clang++-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done

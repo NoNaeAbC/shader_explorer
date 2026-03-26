@@ -18,6 +18,7 @@ ninja    = find_program('ninja', required: true)
 cpp      = meson.get_compiler('cpp')
 threads  = dependency('threads', required: true)
 dl       = dependency('dl', required: true)
+fmt_dep  = dependency('fmt', required: true)
 
 strict_cpp_args = []
 if not get_option('no_warnings')
@@ -414,6 +415,7 @@ deps = [
   vulkan_loader_dep,
   threads,
   dl,
+  fmt_dep,
   slang_dep,
   spirv_tools_dep,
   spirv_tools_opt_dep,
