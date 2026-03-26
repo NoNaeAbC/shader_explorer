@@ -79,7 +79,6 @@ jobs:
             libdrm-dev \
             libelf-dev \
             libexpat1-dev \
-            libllvmspirvlib-${LLVM_VERSION}-dev \
             liblmdb-dev \
             libunwind-dev \
             libzstd-dev \
