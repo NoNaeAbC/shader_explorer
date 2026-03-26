@@ -107,6 +107,7 @@ jobs:
           libdrm_archive="${RUNNER_TEMP}/libdrm-${libdrm_version}.tar.xz"
           libdrm_source_dir="${RUNNER_TEMP}/libdrm-${libdrm_version}"
           libdrm_build_dir="${RUNNER_TEMP}/libdrm-build"
+          meson_site_packages="$(python3 -c 'import site; print(site.getusersitepackages())')"
           rm -rf "${libdrm_archive}" "${libdrm_source_dir}" "${libdrm_build_dir}"
           curl --fail -fsSL "https://dri.freedesktop.org/libdrm/libdrm-${libdrm_version}.tar.xz" -o "${libdrm_archive}"
           tar -xf "${libdrm_archive}" -C "${RUNNER_TEMP}"
@@ -120,7 +121,8 @@ jobs:
             -Dtests=false \
             -Dvalgrind=disabled
           ninja -C "${libdrm_build_dir}"
-          sudo ninja -C "${libdrm_build_dir}" install
+          sudo env "PATH=${HOME}/.local/bin:${PATH}" "PYTHONPATH=${meson_site_packages}${PYTHONPATH:+:${PYTHONPATH}}" \
+            meson install -C "${libdrm_build_dir}" --no-rebuild
           sudo ldconfig
           pkg-config --modversion libdrm
           pkg-config --modversion libdrm_amdgpu
