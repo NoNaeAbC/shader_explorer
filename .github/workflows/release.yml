@@ -148,7 +148,6 @@ jobs:
             expat \
             libdrm \
             libelf \
-            libunwind \
             libzstd \
             zlib; do
             pkg-config --exists "${module}"
