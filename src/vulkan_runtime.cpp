@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fmt/format.h>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
