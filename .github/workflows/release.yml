@@ -23,6 +23,7 @@ jobs:
       CXX: clang++-20
       CXXFLAGS: -stdlib=libc++
       LDFLAGS: -stdlib=libc++
+      PKG_CONFIG_PATH: /usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig
 
     steps:
       - name: Check out sources
@@ -75,10 +76,10 @@ jobs:
             libclang-${LLVM_VERSION}-dev \
             libclang-cpp${LLVM_VERSION}-dev \
             libclc-${LLVM_VERSION}-dev \
-            libdrm-dev \
             libelf-dev \
             libexpat1-dev \
             liblmdb-dev \
+            libpciaccess-dev \
             libzstd-dev \
             lld-${LLVM_VERSION} \
             llvm-${LLVM_VERSION}-dev \
@@ -97,6 +98,32 @@ jobs:
           python3 -m pip install --user 'meson>=1.4,<2'
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           meson --version
+
+      - name: Build pinned libdrm for Mesa on Jammy
+        shell: bash
+        run: |
+          set -euo pipefail
+          libdrm_version=2.4.121
+          libdrm_archive="${RUNNER_TEMP}/libdrm-${libdrm_version}.tar.xz"
+          libdrm_source_dir="${RUNNER_TEMP}/libdrm-${libdrm_version}"
+          libdrm_build_dir="${RUNNER_TEMP}/libdrm-build"
+          rm -rf "${libdrm_archive}" "${libdrm_source_dir}" "${libdrm_build_dir}"
+          curl --fail -fsSL "https://dri.freedesktop.org/libdrm/libdrm-${libdrm_version}.tar.xz" -o "${libdrm_archive}"
+          tar -xf "${libdrm_archive}" -C "${RUNNER_TEMP}"
+          meson setup "${libdrm_build_dir}" "${libdrm_source_dir}" \
+            --prefix=/usr/local \
+            --buildtype=release \
+            -Dauto-features=disabled \
+            -Damdgpu=enabled \
+            -Dcairo-tests=disabled \
+            -Dman-pages=disabled \
+            -Dtests=false \
+            -Dvalgrind=disabled
+          ninja -C "${libdrm_build_dir}"
+          sudo ninja -C "${libdrm_build_dir}" install
+          sudo ldconfig
+          pkg-config --modversion libdrm
+          pkg-config --modversion libdrm_amdgpu
 
       - name: Build pinned glslang validator for Mesa
         shell: bash
