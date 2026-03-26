@@ -376,7 +376,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: slang/__CMake_build_external
-          key: ${{ runner.os }}-slang-${{ steps.slang-cache-key.outputs.commit }}-${{ hashFiles('build_slang.sh') }}
+          key: ${{ runner.os }}-ubuntu2204-clang${{ env.LLVM_VERSION }}-slang-${{ steps.slang-cache-key.outputs.commit }}-${{ hashFiles('build_slang.sh') }}
 
       - name: Verify Slang artifacts
         id: slang-artifacts
