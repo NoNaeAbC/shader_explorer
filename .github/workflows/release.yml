@@ -69,7 +69,6 @@ jobs:
             cmake \
             flex \
             git \
-            glslang-tools \
             clang-${LLVM_VERSION} \
             libc++-${LLVM_VERSION}-dev \
             libc++abi-${LLVM_VERSION}-dev \
@@ -98,6 +97,38 @@ jobs:
           python3 -m pip install --user 'meson>=1.4,<2'
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           meson --version
+
+      - name: Build pinned glslang validator for Mesa
+        shell: bash
+        run: |
+          set -euo pipefail
+          glslang_url="$(sed -n 's/^url = //p' subprojects/glslang.wrap)"
+          glslang_revision="$(sed -n 's/^revision = //p' subprojects/glslang.wrap)"
+          glslang_root="${RUNNER_TEMP}/glslang-src"
+          glslang_build="${RUNNER_TEMP}/glslang-build"
+          rm -rf "${glslang_root}" "${glslang_build}"
+          git -c advice.detachedHead=false clone \
+            --branch "${glslang_revision}" \
+            --depth 1 \
+            --recursive \
+            "${glslang_url}" \
+            "${glslang_root}"
+          cmake -S "${glslang_root}" -B "${glslang_build}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGLSLANG_TESTS=OFF \
+            -DGLSLANG_ENABLE_INSTALL=OFF \
+            -DENABLE_GLSLANG_BINARIES=ON \
+            -DENABLE_HLSL=OFF \
+            -DENABLE_OPT=OFF
+          cmake --build "${glslang_build}" --target glslang-standalone
+          install -Dm755 "${glslang_build}/StandAlone/glslang" "${HOME}/.local/bin/glslang"
+          install -Dm755 "${glslang_build}/StandAlone/glslangValidator" "${HOME}/.local/bin/glslangValidator"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
       - name: Install Rust 1.90 with rustfmt
         uses: dtolnay/rust-toolchain@1.90.0
