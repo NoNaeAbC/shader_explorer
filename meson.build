@@ -238,6 +238,11 @@ shutil.copyfile(version_path, package_dir / 'VulkanHeadersConfigVersion.cmake')
 vulkan_loader_opts = cmake_mod.subproject_options()
 vulkan_loader_opts.add_cmake_defines({
   'VULKAN_HEADERS_INSTALL_DIR': vulkan_loader_headers_prefix,
+  'BUILD_WSI_XCB_SUPPORT': false,
+  'BUILD_WSI_XLIB_SUPPORT': false,
+  'BUILD_WSI_XLIB_XRANDR_SUPPORT': false,
+  'BUILD_WSI_WAYLAND_SUPPORT': false,
+  'BUILD_WSI_DIRECTFB_SUPPORT': false,
 })
 vulkan_loader_sp = cmake_mod.subproject('vulkan-loader', options: vulkan_loader_opts)
 if not vulkan_loader_sp.found()
