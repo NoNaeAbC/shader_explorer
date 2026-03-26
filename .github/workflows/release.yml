@@ -14,13 +14,15 @@ permissions:
 
 jobs:
   build-linux-release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     env:
       LLVM_VERSION: '20'
       LLVM_CONFIG: llvm-config-20
       CLANG_PATH: /usr/lib/llvm-20/bin/clang
-      CC: gcc-14
-      CXX: g++-14
+      CC: clang-20
+      CXX: clang++-20
+      CXXFLAGS: -stdlib=libc++
+      LDFLAGS: -stdlib=libc++
 
     steps:
       - name: Check out sources
@@ -56,7 +58,7 @@ jobs:
           sudo apt-get install -y ca-certificates curl gpg
           curl --fail -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | \
             gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg >/dev/null
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | \
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main" | \
             sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
 
       - name: Install build dependencies
@@ -66,11 +68,11 @@ jobs:
             bison \
             cmake \
             flex \
-            gcc-14 \
             git \
             glslang-tools \
-            g++-14 \
             clang-${LLVM_VERSION} \
+            libc++-${LLVM_VERSION}-dev \
+            libc++abi-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev \
             libclang-cpp${LLVM_VERSION}-dev \
             libclc-${LLVM_VERSION}-dev \
@@ -130,9 +132,8 @@ jobs:
           set -euo pipefail
           glslangValidator --version
           "${LLVM_CONFIG}" --version
-          gcc-14 --version
-          g++-14 --version
           clang-${LLVM_VERSION} --version
+          clang++-${LLVM_VERSION} --version
           rustc --version
           cargo --version
           rustfmt --version
@@ -140,7 +141,9 @@ jobs:
           cbindgen --version
           python3 -c 'import mako'
           patchelf --version
-          for tool in cmake ninja patchelf pkg-config rustc cargo rustfmt bindgen cbindgen bison flex gcc-14 g++-14 glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}"; do
+          printf '#include <print>\nint main() { std::println("{}" , 1); }\n' | \
+            clang++-${LLVM_VERSION} -std=c++23 -stdlib=libc++ -x c++ - -fsyntax-only
+          for tool in cmake ninja patchelf pkg-config rustc cargo rustfmt bindgen cbindgen bison flex glslangValidator "${LLVM_CONFIG}" "clang-${LLVM_VERSION}" "clang++-${LLVM_VERSION}"; do
             command -v "${tool}" >/dev/null
           done
           for module in \
