@@ -33,7 +33,7 @@ rm -rf "${PACKAGE_ROOT}"
 mkdir -p "${PACKAGE_ROOT}"
 cp -RP "${INSTALL_DIR}/." "${PACKAGE_ROOT}/"
 rm -f "${ARCHIVE_PATH}"
-python3 "${BUNDLE_SCRIPT}" "${PACKAGE_ROOT}"
+python3 "${BUNDLE_SCRIPT}" "${PACKAGE_ROOT}" >&2
 
 tar \
   --create \
